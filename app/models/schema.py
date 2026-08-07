@@ -15,15 +15,18 @@ class VisionExtraction(BaseModel):
     category: Optional[str] = None
     items: List[MemoryItem] = []
     summary: Optional[str] = None
+    extracted_text: Optional[str] = None  # verbatim key details: phone numbers, addresses, prices, dates, etc.
 
 
 class MemoryOut(BaseModel):
     id: str
+    screenshot_id: str
     intent: str
     category: Optional[str] = None
     item_name: str
     item_type: Optional[str] = None
     summary: Optional[str] = None
+    extracted_text: Optional[str] = None
     frequency: int
     last_seen: datetime
     created_at: datetime
@@ -33,6 +36,16 @@ class ChatRequest(BaseModel):
     question: str
 
 
+class ChatSource(BaseModel):
+    """A memory the chatbot actually drew on, with a clickable link back to the screenshot."""
+    memory_id: str
+    screenshot_id: str
+    item_name: str
+    extracted_text: Optional[str] = None
+    image_url: str  # signed URL, valid ~1 hour
+
+
 class ChatResponse(BaseModel):
     answer: str
     memories_used: int
+    sources: List[ChatSource] = []

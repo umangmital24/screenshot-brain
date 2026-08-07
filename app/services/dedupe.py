@@ -29,7 +29,8 @@ def find_similar_memory(user_id: str, item_name: str) -> dict | None:
 
 
 def upsert_memory(user_id: str, screenshot_id: str, intent: str, category: str | None,
-                   item_name: str, item_type: str | None, summary: str | None) -> dict:
+                   item_name: str, item_type: str | None, summary: str | None,
+                   extracted_text: str | None = None) -> dict:
     """Insert a new memory, or bump frequency + last_seen if a similar one exists."""
     client = get_client()
     existing = find_similar_memory(user_id, item_name)
@@ -38,6 +39,10 @@ def upsert_memory(user_id: str, screenshot_id: str, intent: str, category: str |
         updated = client.table("memories").update({
             "frequency": existing["frequency"] + 1,
             "last_seen": "now()",
+            # keep screenshot_id/extracted_text pointed at the most recent sighting,
+            # so "click to view" always opens the latest matching screenshot
+            "screenshot_id": screenshot_id,
+            "extracted_text": extracted_text,
         }).eq("id", existing["id"]).execute()
         return updated.data[0]
 
@@ -49,6 +54,7 @@ def upsert_memory(user_id: str, screenshot_id: str, intent: str, category: str |
         "item_name": item_name,
         "item_type": item_type,
         "summary": summary,
+        "extracted_text": extracted_text,
         "frequency": 1,
     }).execute()
     return inserted.data[0]

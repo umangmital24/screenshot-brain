@@ -17,7 +17,11 @@ Return ONLY valid JSON (no markdown fences, no preamble, no explanation) matchin
   "intent": one of ["READ_LATER","WATCH_LATER","BUY_LATER","COOK_LATER","VISIT_LATER","LEARN_LATER","APPLY_LATER","TRY_LATER"],
   "category": short string (e.g. "Books", "Electronics", "Recipes", "Travel"),
   "items": [{"name": string, "type": string}],
-  "summary": one sentence describing why someone would save this
+  "summary": one sentence describing why someone would save this,
+  "extracted_text": verbatim copy of any concrete, reusable details visible in the image - phone numbers,
+    email addresses, physical addresses, prices, dates/times, URLs, usernames, or codes. Keep the original
+    formatting (e.g. "+91 98765 43210"). Join multiple details with " | ". Omit the field (null) if there is
+    no such concrete data in the image - do not paraphrase or summarize this field.
 }
 
 If the screenshot contains multiple distinct items (e.g. a "Top 5 books" list), include all of them in "items".

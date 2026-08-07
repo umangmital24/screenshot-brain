@@ -59,6 +59,7 @@ async def upload_screenshot(
             item_name=item_name,
             item_type=item_type,
             summary=extraction.summary,
+            extracted_text=extraction.extracted_text,
         )
         saved_memories.append(memory)
 
