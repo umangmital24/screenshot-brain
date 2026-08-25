@@ -39,8 +39,9 @@ def get_current_user_id(authorization: str = Header(None)) -> str:
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired, please log in again")
-    except jwt.InvalidTokenError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid auth token: {e}")
+    except (jwt.InvalidTokenError, jwt.PyJWKClientError, Exception) as e:
+        raise HTTPException(status_code=401, detail=f"Authentication failed: {e}")
+
 
     user_id = payload.get("sub")
     if not user_id:

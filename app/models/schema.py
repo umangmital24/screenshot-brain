@@ -27,9 +27,20 @@ class MemoryOut(BaseModel):
     item_type: Optional[str] = None
     summary: Optional[str] = None
     extracted_text: Optional[str] = None
+    image_url: Optional[str] = None
+    is_done: bool = False
     frequency: int
     last_seen: datetime
     created_at: datetime
+
+
+class MemoryUpdate(BaseModel):
+    is_done: Optional[bool] = None
+    intent: Optional[str] = None
+    category: Optional[str] = None
+    item_name: Optional[str] = None
+    summary: Optional[str] = None
+
 
 
 class ChatRequest(BaseModel):

@@ -16,10 +16,11 @@ instead of a graveyard of images in your gallery.
 2. Go to SQL Editor → paste and run `supabase_schema.sql`
 3. Also run this function (needed for fuzzy dedupe):
    ```sql
-   create or replace function match_memory(p_user_id uuid, p_item_name text, p_threshold float)
+   create or replace function match_memory(p_user_id uuid, p_item_name text, p_intent text, p_threshold float)
    returns setof memories as $$
      select * from memories
      where user_id = p_user_id
+       and intent = p_intent
        and similarity(item_name, p_item_name) > p_threshold
      order by similarity(item_name, p_item_name) desc
      limit 1;

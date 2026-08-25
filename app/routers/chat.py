@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 from google import genai
 from fastapi import APIRouter, Depends
 
@@ -23,9 +24,10 @@ def _get_client() -> genai.Client:
 async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
     client = get_client()
 
-    result = client.table("memories").select("*").eq("user_id", user_id).execute()
-    memories = result.data
+    def _fetch_memories():
+        return client.table("memories").select("*").eq("user_id", user_id).execute().data
 
+    memories = await asyncio.to_thread(_fetch_memories)
     # Give every memory a short reference tag (M1, M2, ...) the model can cite back to us,
     # and include extracted_text so it can actually answer "what was the phone number" etc.
     memory_lines = []
@@ -55,10 +57,13 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
     gemini_client = _get_client()
     model = os.environ.get("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
 
-    response = gemini_client.models.generate_content(
-        model=model,
-        contents=[system_prompt, req.question],
-    )
+    def _generate():
+        return gemini_client.models.generate_content(
+            model=model,
+            contents=[system_prompt, req.question],
+        )
+
+    response = await asyncio.to_thread(_generate)
 
     raw_text = response.text or ""
     answer = raw_text
@@ -70,18 +75,33 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
         used_tags = [t.strip() for t in sources_line.strip().split(",") if t.strip() in memories_by_tag]
 
     sources = []
-    for tag in used_tags:
-        m = memories_by_tag[tag]
-        screenshot = client.table("screenshots").select("image_url").eq("id", m["screenshot_id"]).single().execute()
-        storage_path = screenshot.data["image_url"] if screenshot.data else None
-        if not storage_path:
-            continue
-        sources.append(ChatSource(
-            memory_id=m["id"],
-            screenshot_id=m["screenshot_id"],
-            item_name=m["item_name"],
-            extracted_text=m.get("extracted_text"),
-            image_url=get_signed_screenshot_url(storage_path),
-        ))
+    if used_tags:
+        used_memories = [memories_by_tag[tag] for tag in used_tags]
+        screenshot_ids = list({m["screenshot_id"] for m in used_memories if m.get("screenshot_id")})
+
+        def _fetch_screenshot_paths():
+            if not screenshot_ids:
+                return {}
+            res = client.table("screenshots").select("id, image_url").in_("id", screenshot_ids).execute()
+            return {row["id"]: row["image_url"] for row in (res.data or [])}
+
+        path_map = await asyncio.to_thread(_fetch_screenshot_paths)
+
+        for m in used_memories:
+            storage_path = path_map.get(m.get("screenshot_id"))
+            if not storage_path:
+                continue
+            try:
+                signed_url = get_signed_screenshot_url(storage_path)
+                sources.append(ChatSource(
+                    memory_id=m["id"],
+                    screenshot_id=m["screenshot_id"],
+                    item_name=m["item_name"],
+                    extracted_text=m.get("extracted_text"),
+                    image_url=signed_url,
+                ))
+            except Exception:
+                continue
 
     return ChatResponse(answer=answer, memories_used=len(memories), sources=sources)
+

@@ -2,6 +2,7 @@ import os
 import json
 from google import genai
 from google.genai import types
+from tenacity import retry, stop_after_attempt, wait_random_exponential, retry_if_exception_type
 from app.models.schema import VisionExtraction
 
 VALID_INTENTS = {
@@ -39,6 +40,11 @@ def _get_client() -> genai.Client:
     return _client
 
 
+@retry(
+    wait=wait_random_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_attempt(3),
+    reraise=True,
+)
 def _call_gemini(image_bytes: bytes, mime_type: str, strict_retry: bool = False) -> str:
     client = _get_client()
     model = os.environ.get("GEMINI_VISION_MODEL", "gemini-2.5-flash")
@@ -72,19 +78,91 @@ def _parse_json_response(raw: str) -> dict:
 
 
 def extract_intent_from_screenshot(image_bytes: bytes, mime_type: str = "image/png") -> VisionExtraction:
-    """Calls Gemini and returns a validated VisionExtraction.
-    Retries once with a stricter prompt if JSON parsing fails."""
-    raw = _call_gemini(image_bytes, mime_type, strict_retry=False)
+    """Calls Gemini with raw image bytes (multimodal fallback)."""
+    safe_mime = mime_type.lower()
+    if "heic" in safe_mime or "heif" in safe_mime:
+        safe_mime = "image/jpeg"
+    elif not safe_mime.startswith("image/"):
+        safe_mime = "image/png"
+
+    raw = _call_gemini(image_bytes, safe_mime, strict_retry=False)
 
     try:
         parsed = _parse_json_response(raw)
     except (json.JSONDecodeError, ValueError):
-        raw_retry = _call_gemini(image_bytes, mime_type, strict_retry=True)
-        parsed = _parse_json_response(raw_retry)  # let this raise if it fails again
+        raw_retry = _call_gemini(image_bytes, safe_mime, strict_retry=True)
+        parsed = _parse_json_response(raw_retry)
 
     intent = parsed.get("intent", "").upper().strip()
     if intent not in VALID_INTENTS:
         intent = "TRY_LATER"
     parsed["intent"] = intent
 
+    if "items" not in parsed or not isinstance(parsed["items"], list) or len(parsed["items"]) == 0:
+        parsed["items"] = [{"name": parsed.get("summary") or "Screenshot Item", "type": None}]
+
     return VisionExtraction(**parsed)
+
+
+@retry(
+    wait=wait_random_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_attempt(3),
+    reraise=False,
+)
+def extract_intent_from_metadata(
+    extracted_text: str,
+    entities: dict | None = None,
+    app_source: str | None = None,
+) -> VisionExtraction:
+    """
+    Privacy-First Text-Only Classification:
+    Calls Gemini using ONLY on-device extracted text and entities.
+    Zero image bytes are transmitted to the LLM.
+    """
+    client = _get_client()
+    model = os.environ.get("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
+
+    entities_str = json.dumps(entities or {}, ensure_ascii=False)
+    app_str = f"Source Application: {app_source}\n" if app_source else ""
+
+    text_prompt = f"""{SYSTEM_PROMPT}
+
+{app_str}On-Device Extracted Text:
+\"\"\"{extracted_text}\"\"\"
+
+Detected Entities:
+{entities_str}
+"""
+
+    response = client.models.generate_content(
+        model=model,
+        contents=[text_prompt],
+        config=types.GenerateContentConfig(
+            temperature=0.2,
+            response_mime_type="application/json",
+        ),
+    )
+
+    raw = response.text
+    try:
+        parsed = _parse_json_response(raw)
+    except Exception:
+        parsed = {
+            "intent": "TRY_LATER",
+            "category": "Notes",
+            "items": [{"name": extracted_text[:40] if extracted_text else "Note", "type": None}],
+            "summary": extracted_text[:100] if extracted_text else "Saved note",
+            "extracted_text": extracted_text,
+        }
+
+    intent = parsed.get("intent", "").upper().strip()
+    if intent not in VALID_INTENTS:
+        intent = "TRY_LATER"
+    parsed["intent"] = intent
+
+    if "items" not in parsed or not isinstance(parsed["items"], list) or len(parsed["items"]) == 0:
+        parsed["items"] = [{"name": parsed.get("summary") or "Screenshot Item", "type": None}]
+
+    return VisionExtraction(**parsed)
+
+
