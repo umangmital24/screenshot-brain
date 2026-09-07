@@ -8,6 +8,8 @@ create table if not exists screenshots (
   user_id uuid not null,
   image_url text,
   source text,
+  client_event_id uuid,
+  captured_at timestamptz,
   processing_status text not null default 'ready',
   processing_error text,
   created_at timestamptz default now(),
@@ -31,6 +33,8 @@ create table if not exists memories (
 );
 
 alter table screenshots alter column image_url drop not null;
+alter table screenshots add column if not exists client_event_id uuid;
+alter table screenshots add column if not exists captured_at timestamptz;
 alter table screenshots add column if not exists processing_status text not null default 'ready';
 alter table screenshots add column if not exists processing_error text;
 DO $$
@@ -45,6 +49,11 @@ END $$;
 alter table memories add column if not exists extracted_text text;
 alter table memories add column if not exists is_done boolean default false;
 
+create unique index if not exists idx_screenshots_user_client_event
+  on screenshots (user_id, client_event_id)
+  where client_event_id is not null;
+create index if not exists idx_screenshots_user_captured_at
+  on screenshots (user_id, captured_at desc);
 create index if not exists idx_memories_item_name_trgm
   on memories using gin (item_name gin_trgm_ops);
 create index if not exists idx_memories_user_intent on memories (user_id, intent);
