@@ -1,7 +1,8 @@
 import uuid
 import asyncio
 import logging
-from pydantic import BaseModel, Field
+from datetime import datetime
+from pydantic import BaseModel, Field, field_validator
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 
 from app.services.db import get_client, get_bucket_name, get_signed_screenshot_url
@@ -22,11 +23,36 @@ class ClientMetadataPayload(BaseModel):
     entities: dict | None = Field(default_factory=dict, description="Extracted URLs, phones, prices")
     app_source: str | None = Field(None, max_length=120, description="Source app name if detected")
     image_storage_path: str | None = Field(None, max_length=500, description="Optional private storage path")
+    client_event_id: str | None = Field(None, max_length=64, description="Client-generated idempotency key for retry-safe captures")
+    captured_at: datetime | None = Field(None, description="Client capture timestamp")
+
+    @field_validator("client_event_id")
+    @classmethod
+    def validate_client_event_id(cls, value):
+        if value is None:
+            return value
+        cleaned = value.strip()
+        try:
+            return str(uuid.UUID(cleaned))
+        except (ValueError, AttributeError):
+            raise ValueError("client_event_id must be a valid UUID")
 
 
 def _mark_screenshot(client, screenshot_id: str, status: str, error_message: str | None = None) -> None:
     payload = {"processing_status": status, "processing_error": error_message}
     client.table("screenshots").update(payload).eq("id", screenshot_id).execute()
+
+
+def _fetch_memories_for_screenshot(client, user_id: str, screenshot_id: str) -> list[dict]:
+    result = (
+        client.table("memories")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("screenshot_id", screenshot_id)
+        .order("created_at")
+        .execute()
+    )
+    return result.data or []
 
 
 @router.post("/metadata")
@@ -43,23 +69,121 @@ async def process_on_device_metadata(
 
     client = get_client()
     storage_path = payload.image_storage_path
+    screenshot_id: str | None = None
+    retry_existing_failed = False
 
-    def _insert_screenshot_record():
-        row = client.table("screenshots").insert({
-            "user_id": user_id,
-            "image_url": storage_path,
-            "source": payload.app_source or "on_device_ocr",
-            "processing_status": "processing",
-        }).execute()
-        if not row.data:
-            raise RuntimeError("Screenshot insert returned no data")
-        return row.data[0]["id"]
+    def _find_existing_event():
+        if not payload.client_event_id:
+            return None
+        result = (
+            client.table("screenshots")
+            .select("id,processing_status,processing_error")
+            .eq("user_id", user_id)
+            .eq("client_event_id", payload.client_event_id)
+            .limit(1)
+            .execute()
+        )
+        return result.data[0] if result.data else None
 
     try:
-        screenshot_id = await asyncio.to_thread(_insert_screenshot_record)
+        existing = await asyncio.to_thread(_find_existing_event)
     except Exception:
-        logger.exception("Failed to create screenshot metadata record")
+        logger.exception("Failed to check screenshot idempotency key")
         raise HTTPException(status_code=503, detail="Unable to start screenshot processing.")
+
+    if existing:
+        screenshot_id = existing["id"]
+        status = existing.get("processing_status") or "processing"
+
+        if status == "ready":
+            try:
+                existing_memories = await asyncio.to_thread(_fetch_memories_for_screenshot, client, user_id, screenshot_id)
+            except Exception:
+                logger.exception("Failed to fetch memories for idempotent screenshot retry")
+                raise HTTPException(status_code=503, detail="Unable to load the saved screenshot result.")
+
+            first_memory = existing_memories[0] if existing_memories else {}
+            return {
+                "screenshot_id": screenshot_id,
+                "intent": first_memory.get("intent"),
+                "category": first_memory.get("category"),
+                "memories": existing_memories,
+                "mode": "on_device_privacy",
+                "processing_status": "ready",
+                "idempotent_replay": True,
+            }
+
+        if status == "processing":
+            return {
+                "screenshot_id": screenshot_id,
+                "intent": None,
+                "category": None,
+                "memories": [],
+                "mode": "on_device_privacy",
+                "processing_status": "processing",
+                "idempotent_replay": True,
+            }
+
+        retry_existing_failed = True
+
+    if screenshot_id is None:
+        def _insert_screenshot_record():
+            insert_payload = {
+                "user_id": user_id,
+                "image_url": storage_path,
+                "source": payload.app_source or "on_device_ocr",
+                "processing_status": "processing",
+            }
+            if payload.client_event_id:
+                insert_payload["client_event_id"] = payload.client_event_id
+            if payload.captured_at:
+                insert_payload["captured_at"] = payload.captured_at.isoformat()
+
+            row = client.table("screenshots").insert(insert_payload).execute()
+            if not row.data:
+                raise RuntimeError("Screenshot insert returned no data")
+            return row.data[0]["id"]
+
+        try:
+            screenshot_id = await asyncio.to_thread(_insert_screenshot_record)
+        except Exception:
+            if payload.client_event_id:
+                try:
+                    raced = await asyncio.to_thread(_find_existing_event)
+                except Exception:
+                    raced = None
+                if raced:
+                    status = raced.get("processing_status") or "processing"
+                    if status == "ready":
+                        existing_memories = await asyncio.to_thread(_fetch_memories_for_screenshot, client, user_id, raced["id"])
+                        first_memory = existing_memories[0] if existing_memories else {}
+                        return {
+                            "screenshot_id": raced["id"],
+                            "intent": first_memory.get("intent"),
+                            "category": first_memory.get("category"),
+                            "memories": existing_memories,
+                            "mode": "on_device_privacy",
+                            "processing_status": "ready",
+                            "idempotent_replay": True,
+                        }
+                    return {
+                        "screenshot_id": raced["id"],
+                        "intent": None,
+                        "category": None,
+                        "memories": [],
+                        "mode": "on_device_privacy",
+                        "processing_status": status,
+                        "idempotent_replay": True,
+                    }
+
+            logger.exception("Failed to create screenshot metadata record")
+            raise HTTPException(status_code=503, detail="Unable to start screenshot processing.")
+    elif retry_existing_failed:
+        try:
+            await asyncio.to_thread(_mark_screenshot, client, screenshot_id, "processing", None)
+        except Exception:
+            logger.exception("Failed to restart failed screenshot processing")
+            raise HTTPException(status_code=503, detail="Unable to retry screenshot processing.")
 
     try:
         extraction = await asyncio.to_thread(
@@ -104,6 +228,7 @@ async def process_on_device_metadata(
         "memories": saved_memories,
         "mode": "on_device_privacy",
         "processing_status": "ready",
+        "idempotent_replay": retry_existing_failed,
     }
 
 
