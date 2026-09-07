@@ -68,8 +68,11 @@ class ChatSource(BaseModel):
     memory_id: str
     screenshot_id: str
     item_name: str
+    intent: Optional[str] = None
+    category: Optional[str] = None
+    summary: Optional[str] = None
     extracted_text: Optional[str] = None
-    image_url: str
+    image_url: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
