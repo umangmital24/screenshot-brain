@@ -94,24 +94,36 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
             if not screenshot_ids:
                 return {}
             res = client.table("screenshots").select("id,image_url").eq("user_id", user_id).in_("id", screenshot_ids).execute()
-            return {row["id"]: row["image_url"] for row in (res.data or [])}
+            return {row["id"]: row.get("image_url") for row in (res.data or [])}
 
         try:
             path_map = await asyncio.to_thread(_fetch_screenshot_paths)
         except Exception:
+            logger.warning("Could not fetch screenshot paths for chat sources", exc_info=True)
             path_map = {}
 
         for m in used_memories:
+            signed_url = None
             storage_path = path_map.get(m.get("screenshot_id"))
-            if not storage_path:
-                continue
-            try:
-                signed_url = await asyncio.to_thread(get_signed_screenshot_url, storage_path)
-                sources.append(ChatSource(
-                    memory_id=m["id"], screenshot_id=m["screenshot_id"], item_name=m["item_name"],
-                    extracted_text=m.get("extracted_text"), image_url=signed_url,
-                ))
-            except Exception:
-                logger.warning("Could not sign chat source URL", exc_info=True)
+            if storage_path:
+                try:
+                    signed_url = await asyncio.to_thread(get_signed_screenshot_url, storage_path)
+                except Exception:
+                    logger.warning("Could not sign chat source URL", exc_info=True)
 
-    return ChatResponse(answer=answer or "I couldn't find an answer in your saved memories.", memories_used=len(memories), sources=sources)
+            sources.append(ChatSource(
+                memory_id=m["id"],
+                screenshot_id=m["screenshot_id"],
+                item_name=m["item_name"],
+                intent=m.get("intent"),
+                category=m.get("category"),
+                summary=m.get("summary"),
+                extracted_text=m.get("extracted_text"),
+                image_url=signed_url,
+            ))
+
+    return ChatResponse(
+        answer=answer or "I couldn't find an answer in your saved memories.",
+        memories_used=len(memories),
+        sources=sources,
+    )
