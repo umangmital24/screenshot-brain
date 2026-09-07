@@ -11,22 +11,47 @@ VALID_INTENTS = {
 }
 
 SYSTEM_PROMPT = """You are an intent-extraction engine for a screenshot memory app.
-Given a screenshot image, extract the user's underlying INTENT for saving it.
+Your job is to infer what the user actually wanted to remember, not to turn every visible text fragment into a memory.
+
+PRIMARY-SAVE-TARGET RULES:
+1. Create ONE memory item by default: the single primary thing the user most likely intended to save.
+2. Only create multiple items when the content itself clearly presents a real list/set of peer recommendations, such as "Top 5 books", "3 restaurants to try", or a product comparison with several intended items.
+3. Do NOT create separate items from unrelated surrounding UI or incidental OCR text.
+4. For social-media screenshots, identify the main content/recommendation in the central post/reel/card and ignore platform chrome and adjacent-feed noise.
+5. Ignore unless essential to the primary memory:
+   - usernames, page/account names, profile names
+   - Follow/Like/Comment/Share/Save labels and counts
+   - music/audio track labels or artist names used as background audio
+   - timestamps, dates of posting, "See translation", "more", navigation labels
+   - status bar text, battery/network/time indicators
+   - partially visible next/previous posts
+   - watermarks, logos, app UI controls
+6. A creator/person name should only become the memory item when the screenshot is actually about that person (for example a profile, speaker, author, artist, or creator recommendation).
+7. A song/audio label should only become the memory item when the visible content is explicitly recommending that song/audio; background reel audio is not a saved item.
+8. Prefer the semantic recommendation visible in the content over OCR ordering. Example: if text says "If you liked Drishyam, watch Raat Akeli Hai", the saved item is "Raat Akeli Hai", not Drishyam, the account name, or the reel audio.
+
+SUMMARY RULES:
+- Write a short, useful memory summary describing the content itself.
+- Do NOT write generic phrases such as "The user saved this screenshot...", "This screenshot contains...", or "The user wants to remember...".
+- Prefer summaries like "Recommended if you liked Drishyam." or "AI Engineer role focused on Python, FastAPI and LLMs."
 
 Return ONLY valid JSON (no markdown fences, no preamble, no explanation) matching this schema:
 {
   "intent": one of ["READ_LATER","WATCH_LATER","BUY_LATER","COOK_LATER","VISIT_LATER","LEARN_LATER","APPLY_LATER","TRY_LATER"],
-  "category": short string (e.g. "Books", "Electronics", "Recipes", "Travel"),
+  "category": short specific string (e.g. "Books", "Movies", "Jobs", "Restaurants", "Electronics", "Recipes", "Travel"),
   "items": [{"name": string, "type": string}],
-  "summary": one sentence describing why someone would save this,
-  "extracted_text": verbatim copy of any concrete, reusable details visible in the image - phone numbers,
-    email addresses, physical addresses, prices, dates/times, URLs, usernames, or codes. Keep the original
-    formatting (e.g. "+91 98765 43210"). Join multiple details with " | ". Omit the field (null) if there is
-    no such concrete data in the image - do not paraphrase or summarize this field.
+  "summary": one short sentence useful on a memory card,
+  "extracted_text": verbatim copy of concrete, reusable details that belong to the primary saved content - such as phone numbers,
+    email addresses, physical addresses, prices, dates/times, URLs, usernames, codes, or a short key recommendation phrase. Do not include
+    unrelated app chrome or adjacent-feed text. Keep original formatting where useful. Omit the field (null) if there is no useful concrete data.
 }
 
-If the screenshot contains multiple distinct items (e.g. a "Top 5 books" list), include all of them in "items".
-If unsure of intent, make your best guess from context - never leave it blank.
+Examples:
+- Social reel text: "If You Liked Drishyam, Watch Raat Akeli Hai" plus usernames/audio/UI -> one item: Raat Akeli Hai, type Movie, WATCH_LATER, category Movies.
+- Post titled "5 books every engineer should read" with five clearly listed book titles -> five book items are allowed.
+- Shopping post showing one featured pair of shoes plus creator username and background song -> one item: the shoes/product, not the creator or song.
+
+If unsure of intent, make your best guess from the primary content - never leave it blank.
 """
 
 _client: genai.Client | None = None
@@ -61,7 +86,7 @@ def _call_gemini(image_bytes: bytes, mime_type: str, strict_retry: bool = False)
         ],
         config=types.GenerateContentConfig(
             temperature=0.2,
-            response_mime_type="application/json",  # forces valid JSON output
+            response_mime_type="application/json",
         ),
     )
     return response.text
@@ -132,13 +157,18 @@ def extract_intent_from_metadata(
 
 Detected Entities:
 {entities_str}
+
+IMPORTANT FOR OCR-ONLY INPUT:
+The OCR text may contain the entire phone screen in reading order, including status bar text, social-media usernames, audio labels,
+engagement counts, captions, adjacent posts, and navigation. Reconstruct the likely visual hierarchy from the text and choose the
+single primary save target unless there is clear evidence of a genuine multi-item recommendation list.
 """
 
     response = client.models.generate_content(
         model=model,
         contents=[text_prompt],
         config=types.GenerateContentConfig(
-            temperature=0.2,
+            temperature=0.15,
             response_mime_type="application/json",
         ),
     )
@@ -164,5 +194,3 @@ Detected Entities:
         parsed["items"] = [{"name": parsed.get("summary") or "Screenshot Item", "type": None}]
 
     return VisionExtraction(**parsed)
-
-
