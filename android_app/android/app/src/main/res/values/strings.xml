@@ -1,0 +1,5 @@
+<resources>
+  <string name="app_name">Samhaal</string>
+  <string name="accessibility_service_label">Samhaal Save Bubble</string>
+  <string name="accessibility_service_description">Shows the Samhaal Save Bubble and captures the current screen only when you tap the bubble, so on-device OCR can create a memory.</string>
+</resources>
