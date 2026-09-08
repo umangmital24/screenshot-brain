@@ -1,5 +1,6 @@
 import { NativeModules, DeviceEventEmitter } from 'react-native'
 import { saveExtractedText, uploadScreenshot } from './api'
+import { saveLocalScreenshotReferences } from './localMemoryMedia'
 import { supabase } from './supabaseClient'
 
 const { SaveBubble } = NativeModules
@@ -14,14 +15,15 @@ function reportBubbleResult(success, message = null) {
 
 /**
  * Headless bridge used by the Android Save Bubble.
- * Preferred path receives OCR text directly from the AccessibilityService, so
- * screenshot pixels never need to leave native memory or be written to the gallery.
+ * Screenshot pixels stay in app-private local storage for memory-card reference.
+ * Only OCR text and small capture metadata are sent to the backend.
  */
 export default async function uploadScreenshotTask(data) {
-  console.log('[uploadScreenshotTask] TRIGGERED with data keys:', Object.keys(data || {}))
   const extractedText = data?.extractedText
   const filePath = data?.filePath
-  console.log('[uploadScreenshotTask] extractedText length:', extractedText?.length, 'filePath:', filePath)
+  const clientEventId = data?.clientEventId
+  const capturedAt = data?.capturedAt
+  const screenshotPath = data?.screenshotPath
   if (!extractedText && !filePath) return
 
   const { data: sessionData } = await supabase.auth.getSession()
@@ -32,7 +34,11 @@ export default async function uploadScreenshotTask(data) {
 
   try {
     if (extractedText) {
-      await saveExtractedText(extractedText, 'android_save_bubble')
+      const result = await saveExtractedText(extractedText, 'android_save_bubble', {
+        clientEventId,
+        capturedAt,
+      })
+      await saveLocalScreenshotReferences(result.memories || [], screenshotPath, result.screenshot_id)
       reportBubbleResult(true)
       DeviceEventEmitter.emit('memoriesUpdated')
       return
