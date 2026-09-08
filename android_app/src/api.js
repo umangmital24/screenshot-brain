@@ -16,12 +16,18 @@ function requireApiBase() {
   if (!API_BASE) throw new Error('EXPO_PUBLIC_API_BASE is not configured.')
 }
 
+function apiError(message, status = null) {
+  const error = new Error(message)
+  error.status = status
+  return error
+}
+
 export async function fetchMemories(intent) {
   requireApiBase()
   const headers = await authHeaders()
   const url = intent ? `${API_BASE}/memories?intent=${encodeURIComponent(intent)}` : `${API_BASE}/memories`
   const res = await fetch(url, { headers })
-  if (!res.ok) throw new Error('Could not load memories')
+  if (!res.ok) throw apiError('Could not load memories', res.status)
   return res.json()
 }
 
@@ -29,7 +35,7 @@ export async function fetchSummary() {
   requireApiBase()
   const headers = await authHeaders()
   const res = await fetch(`${API_BASE}/memories/summary`, { headers })
-  if (!res.ok) throw new Error('Could not load summary')
+  if (!res.ok) throw apiError('Could not load summary', res.status)
   return res.json()
 }
 
@@ -51,6 +57,9 @@ export async function saveExtractedText(
 
   if (captureMeta.clientEventId) body.client_event_id = captureMeta.clientEventId
   if (captureMeta.capturedAt) body.captured_at = captureMeta.capturedAt
+  if (Array.isArray(captureMeta.ocrBlocks) && captureMeta.ocrBlocks.length) {
+    body.ocr_blocks = captureMeta.ocrBlocks
+  }
 
   const res = await fetch(`${API_BASE}/screenshot/metadata`, {
     method: 'POST',
@@ -66,7 +75,7 @@ export async function saveExtractedText(
     data = { detail: text }
   }
 
-  if (!res.ok) throw new Error(data.detail || 'Could not save this screen')
+  if (!res.ok) throw apiError(data.detail || 'Could not save this screen', res.status)
   return data
 }
 
@@ -88,6 +97,6 @@ export async function askChat(question) {
     body: JSON.stringify({ question }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.detail || 'Chat failed')
+  if (!res.ok) throw apiError(data.detail || 'Chat failed', res.status)
   return data
 }
