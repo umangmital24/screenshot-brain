@@ -15,15 +15,16 @@ function reportBubbleResult(success, message = null) {
 
 /**
  * Headless bridge used by the Android Save Bubble.
- * Screenshot pixels stay in app-private local storage for memory-card reference.
- * Only OCR text and small capture metadata are sent to the backend.
+ * The screenshot itself lives in Android MediaStore/Gallery. Samhaal stores only
+ * that local content URI as a memory reference. Only OCR text and small capture
+ * metadata are sent to the backend.
  */
 export default async function uploadScreenshotTask(data) {
   const extractedText = data?.extractedText
   const filePath = data?.filePath
   const clientEventId = data?.clientEventId
   const capturedAt = data?.capturedAt
-  const screenshotPath = data?.screenshotPath
+  const screenshotUri = data?.screenshotUri
   if (!extractedText && !filePath) return
 
   const { data: sessionData } = await supabase.auth.getSession()
@@ -38,7 +39,7 @@ export default async function uploadScreenshotTask(data) {
         clientEventId,
         capturedAt,
       })
-      await saveLocalScreenshotReferences(result.memories || [], screenshotPath, result.screenshot_id)
+      await saveLocalScreenshotReferences(result.memories || [], screenshotUri, result.screenshot_id)
       reportBubbleResult(true)
       DeviceEventEmitter.emit('memoriesUpdated')
       return
