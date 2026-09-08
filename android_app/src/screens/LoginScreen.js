@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native'
 import { GoogleSignin } from '@react-native-google-signin/google-signin'
 import { supabase } from '../supabaseClient'
@@ -20,6 +21,10 @@ GoogleSignin.configure({
 })
 
 export default function LoginScreen() {
+  const { height } = useWindowDimensions()
+  const compact = height < 760
+  const veryCompact = height < 690
+
   const [mode, setMode] = useState('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -77,29 +82,31 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.demoSection}>
-          <View style={styles.brandRow}>
+        <View style={[
+          styles.demoSection,
+          compact && styles.demoSectionCompact,
+          veryCompact && styles.demoSectionVeryCompact,
+        ]}>
+          <View style={[styles.brandRow, compact && styles.brandRowCompact]}>
             <Text style={styles.brand}>Samhaal</Text>
-            <Text style={styles.brandTag}>Remember what you save.</Text>
+            {!veryCompact ? <Text style={styles.brandTag}>Remember what you save.</Text> : null}
           </View>
           <AuthProductDemo />
         </View>
 
-        <View style={styles.authSection}>
-          <Text style={styles.title}>{isSignup ? 'Create your memory space.' : 'From screenshot to memory.'}</Text>
-          <Text style={styles.copy}>
+        <View style={[styles.authSection, compact && styles.authSectionCompact]}>
+          <Text style={[styles.title, compact && styles.titleCompact]}>
+            {isSignup ? 'Create your memory space.' : 'From screenshot to memory.'}
+          </Text>
+          <Text style={[styles.copy, compact && styles.copyCompact]}>
             Save anything. Samhaal organizes it into a memory you can search and ask about later.
           </Text>
 
           <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn} disabled={googleLoading} activeOpacity={0.8}>
-            {googleLoading ? (
-              <ActivityIndicator color={colors.text} />
-            ) : (
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
-            )}
+            {googleLoading ? <ActivityIndicator color={colors.text} /> : <Text style={styles.googleButtonText}>Continue with Google</Text>}
           </TouchableOpacity>
 
-          <View style={styles.dividerRow}>
+          <View style={[styles.dividerRow, compact && styles.dividerRowCompact]}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>or</Text>
             <View style={styles.dividerLine} />
@@ -124,11 +131,7 @@ export default function LoginScreen() {
           />
 
           <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
-            {submitting ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={styles.primaryButtonText}>{isSignup ? 'Create account' : 'Sign in'}</Text>
-            )}
+            {submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryButtonText}>{isSignup ? 'Create account' : 'Sign in'}</Text>}
           </TouchableOpacity>
 
           {message && <Text style={[styles.message, message.error && styles.messageError]}>{message.text}</Text>}
@@ -139,17 +142,17 @@ export default function LoginScreen() {
               setMessage(null)
             }}
           >
-            <Text style={styles.toggleText}>
+            <Text style={[styles.toggleText, compact && styles.toggleTextCompact]}>
               {isSignup ? 'Already have an account? Sign in' : 'New to Samhaal? Create an account'}
             </Text>
           </TouchableOpacity>
 
-          <View style={styles.privacyRow}>
-            <Text style={styles.privacyTitle}>Privacy-first by design</Text>
-            <Text style={styles.privacy}>
-              Screens are read on-device first. Raw screenshots are not sent to AI by default.
-            </Text>
-          </View>
+          {!veryCompact ? (
+            <View style={[styles.privacyRow, compact && styles.privacyRowCompact]}>
+              <Text style={styles.privacyTitle}>Privacy-first by design</Text>
+              <Text style={styles.privacy}>Screens are read on-device first. Raw screenshots are not sent to AI by default.</Text>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -159,50 +162,34 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FAFAF9' },
   scrollContent: { flexGrow: 1 },
-  demoSection: {
-    backgroundColor: '#F5F5F4',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-    paddingTop: Platform.OS === 'ios' ? 54 : 34,
-    paddingBottom: 10,
-    minHeight: 465,
-  },
-  brandRow: { paddingHorizontal: 22, marginBottom: 2 },
-  brand: { fontSize: 13, fontWeight: '700', color: colors.text },
+  demoSection: { backgroundColor: '#F5F5F4', borderBottomWidth: 1, borderBottomColor: colors.borderSubtle, paddingTop: Platform.OS === 'ios' ? 52 : 32, paddingBottom: 10, minHeight: 456 },
+  demoSectionCompact: { minHeight: 405, paddingTop: Platform.OS === 'ios' ? 44 : 24, paddingBottom: 6 },
+  demoSectionVeryCompact: { minHeight: 340, paddingTop: Platform.OS === 'ios' ? 36 : 18 },
+  brandRow: { paddingHorizontal: 22, marginBottom: 1 },
+  brandRowCompact: { paddingHorizontal: 20 },
+  brand: { fontSize: 13, fontWeight: '700', color: colors.text, letterSpacing: -0.1 },
   brandTag: { fontSize: 10.5, color: colors.textFaint, marginTop: 3 },
-  authSection: { paddingHorizontal: 24, paddingTop: 27, paddingBottom: 34, backgroundColor: colors.canvas },
+  authSection: { paddingHorizontal: 24, paddingTop: 26, paddingBottom: 32, backgroundColor: colors.canvas },
+  authSectionCompact: { paddingTop: 20, paddingBottom: 24, paddingHorizontal: 22 },
   title: { fontSize: 26, lineHeight: 32, letterSpacing: -0.7, fontWeight: '700', color: colors.text },
-  copy: { fontSize: 13.5, color: colors.textMuted, lineHeight: 20, marginTop: 8, marginBottom: 22, maxWidth: 348 },
-  googleButton: {
-    minHeight: 50,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-  },
+  titleCompact: { fontSize: 23, lineHeight: 28, letterSpacing: -0.55 },
+  copy: { fontSize: 13.5, color: colors.textMuted, lineHeight: 20, marginTop: 8, marginBottom: 21, maxWidth: 348 },
+  copyCompact: { fontSize: 12.8, lineHeight: 18.5, marginTop: 6, marginBottom: 16 },
+  googleButton: { minHeight: 50, borderWidth: 1, borderColor: colors.border, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
   googleButtonText: { color: colors.text, fontSize: 14, fontWeight: '600' },
   dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 15, gap: 10 },
+  dividerRowCompact: { marginVertical: 12 },
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.borderSubtle },
   dividerText: { fontSize: 11, color: colors.textFaint },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 11,
-    paddingVertical: 13,
-    paddingHorizontal: 14,
-    fontSize: 14,
-    color: colors.text,
-    backgroundColor: colors.surface,
-    marginBottom: 9,
-  },
+  input: { borderWidth: 1, borderColor: colors.border, borderRadius: 11, paddingVertical: 12.5, paddingHorizontal: 14, fontSize: 14, color: colors.text, backgroundColor: colors.surface, marginBottom: 9 },
   primaryButton: { minHeight: 49, backgroundColor: colors.black, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 3 },
   primaryButtonText: { color: colors.white, fontSize: 14, fontWeight: '700' },
-  message: { fontSize: 12.5, color: colors.success, marginTop: 12, lineHeight: 18 },
+  message: { fontSize: 12.5, color: colors.success, marginTop: 11, lineHeight: 18 },
   messageError: { color: colors.danger },
-  toggleText: { fontSize: 12.5, color: colors.textSecondary, textAlign: 'center', marginTop: 17, fontWeight: '500' },
-  privacyRow: { alignItems: 'center', marginTop: 23 },
+  toggleText: { fontSize: 12.5, color: colors.textSecondary, textAlign: 'center', marginTop: 16, fontWeight: '500' },
+  toggleTextCompact: { marginTop: 13 },
+  privacyRow: { alignItems: 'center', marginTop: 22 },
+  privacyRowCompact: { marginTop: 16 },
   privacyTitle: { fontSize: 10.5, color: colors.textSecondary, fontWeight: '700' },
   privacy: { marginTop: 4, fontSize: 10.5, color: colors.textFaint, textAlign: 'center', lineHeight: 15, maxWidth: 310 },
 })
