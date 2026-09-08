@@ -2,7 +2,7 @@ import os
 import json
 from google import genai
 from google.genai import types
-from tenacity import retry, stop_after_attempt, wait_random_exponential, retry_if_exception_type
+from tenacity import retry, stop_after_attempt, wait_random_exponential
 from app.models.schema import VisionExtraction
 
 VALID_INTENTS = {
@@ -26,30 +26,25 @@ PRIMARY-SAVE-TARGET RULES:
    - status bar text, battery/network/time indicators
    - partially visible next/previous posts
    - watermarks, logos, app UI controls
-6. A creator/person name should only become the memory item when the screenshot is actually about that person (for example a profile, speaker, author, artist, or creator recommendation).
-7. A song/audio label should only become the memory item when the visible content is explicitly recommending that song/audio; background reel audio is not a saved item.
-8. Prefer the semantic recommendation visible in the content over OCR ordering. Example: if text says "If you liked Drishyam, watch Raat Akeli Hai", the saved item is "Raat Akeli Hai", not Drishyam, the account name, or the reel audio.
+6. A creator/person name should only become the memory item when the screenshot is actually about that person.
+7. A song/audio label should only become the memory item when visible content explicitly recommends that song/audio; background reel audio is not a saved item.
+8. Prefer the semantic recommendation visible in the content over OCR ordering. Example: "If you liked Drishyam, watch Raat Akeli Hai" -> save Raat Akeli Hai.
+9. Use source-app context as a prior, not as the answer itself. For example, LinkedIn makes job-role text more likely to be APPLY_LATER, Amazon makes product text more likely BUY_LATER, but the visible content still decides.
+10. When OCR block geometry is available, prioritize prominent central blocks over tiny text near the top/bottom/edges. Blocks are normalized to the screen: left/top/width/height are between 0 and 1.
 
 SUMMARY RULES:
 - Write a short, useful memory summary describing the content itself.
 - Do NOT write generic phrases such as "The user saved this screenshot...", "This screenshot contains...", or "The user wants to remember...".
 - Prefer summaries like "Recommended if you liked Drishyam." or "AI Engineer role focused on Python, FastAPI and LLMs."
 
-Return ONLY valid JSON (no markdown fences, no preamble, no explanation) matching this schema:
+Return ONLY valid JSON matching this schema:
 {
   "intent": one of ["READ_LATER","WATCH_LATER","BUY_LATER","COOK_LATER","VISIT_LATER","LEARN_LATER","APPLY_LATER","TRY_LATER"],
-  "category": short specific string (e.g. "Books", "Movies", "Jobs", "Restaurants", "Electronics", "Recipes", "Travel"),
+  "category": short specific string,
   "items": [{"name": string, "type": string}],
   "summary": one short sentence useful on a memory card,
-  "extracted_text": verbatim copy of concrete, reusable details that belong to the primary saved content - such as phone numbers,
-    email addresses, physical addresses, prices, dates/times, URLs, usernames, codes, or a short key recommendation phrase. Do not include
-    unrelated app chrome or adjacent-feed text. Keep original formatting where useful. Omit the field (null) if there is no useful concrete data.
+  "extracted_text": verbatim copy of concrete, reusable details that belong to the primary saved content, or null
 }
-
-Examples:
-- Social reel text: "If You Liked Drishyam, Watch Raat Akeli Hai" plus usernames/audio/UI -> one item: Raat Akeli Hai, type Movie, WATCH_LATER, category Movies.
-- Post titled "5 books every engineer should read" with five clearly listed book titles -> five book items are allowed.
-- Shopping post showing one featured pair of shoes plus creator username and background song -> one item: the shoes/product, not the creator or song.
 
 If unsure of intent, make your best guess from the primary content - never leave it blank.
 """
@@ -60,34 +55,21 @@ _client: genai.Client | None = None
 def _get_client() -> genai.Client:
     global _client
     if _client is None:
-        api_key = os.environ["GEMINI_API_KEY"]
-        _client = genai.Client(api_key=api_key)
+        _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     return _client
 
 
-@retry(
-    wait=wait_random_exponential(multiplier=1, min=1, max=10),
-    stop=stop_after_attempt(3),
-    reraise=True,
-)
+@retry(wait=wait_random_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(3), reraise=True)
 def _call_gemini(image_bytes: bytes, mime_type: str, strict_retry: bool = False) -> str:
     client = _get_client()
     model = os.environ.get("GEMINI_VISION_MODEL", "gemini-2.5-flash")
-
     prompt = SYSTEM_PROMPT
     if strict_retry:
-        prompt += "\n\nIMPORTANT: Your previous response was not valid JSON. Return ONLY the raw JSON object, nothing else."
-
+        prompt += "\n\nIMPORTANT: Return ONLY the raw JSON object."
     response = client.models.generate_content(
         model=model,
-        contents=[
-            types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-            prompt,
-        ],
-        config=types.GenerateContentConfig(
-            temperature=0.2,
-            response_mime_type="application/json",
-        ),
+        contents=[types.Part.from_bytes(data=image_bytes, mime_type=mime_type), prompt],
+        config=types.GenerateContentConfig(temperature=0.2, response_mime_type="application/json"),
     )
     return response.text
 
@@ -98,12 +80,20 @@ def _parse_json_response(raw: str) -> dict:
         cleaned = cleaned.strip("`")
         if cleaned.startswith("json"):
             cleaned = cleaned[4:]
-    cleaned = cleaned.strip()
-    return json.loads(cleaned)
+    return json.loads(cleaned.strip())
+
+
+def _normalize_extraction(parsed: dict, fallback_text: str | None = None) -> VisionExtraction:
+    intent = parsed.get("intent", "").upper().strip()
+    if intent not in VALID_INTENTS:
+        intent = "TRY_LATER"
+    parsed["intent"] = intent
+    if "items" not in parsed or not isinstance(parsed["items"], list) or not parsed["items"]:
+        parsed["items"] = [{"name": parsed.get("summary") or (fallback_text or "Screenshot Item")[:40], "type": None}]
+    return VisionExtraction(**parsed)
 
 
 def extract_intent_from_screenshot(image_bytes: bytes, mime_type: str = "image/png") -> VisionExtraction:
-    """Calls Gemini with raw image bytes (multimodal fallback)."""
     safe_mime = mime_type.lower()
     if "heic" in safe_mime or "heif" in safe_mime:
         safe_mime = "image/jpeg"
@@ -111,71 +101,61 @@ def extract_intent_from_screenshot(image_bytes: bytes, mime_type: str = "image/p
         safe_mime = "image/png"
 
     raw = _call_gemini(image_bytes, safe_mime, strict_retry=False)
-
     try:
         parsed = _parse_json_response(raw)
     except (json.JSONDecodeError, ValueError):
-        raw_retry = _call_gemini(image_bytes, safe_mime, strict_retry=True)
-        parsed = _parse_json_response(raw_retry)
-
-    intent = parsed.get("intent", "").upper().strip()
-    if intent not in VALID_INTENTS:
-        intent = "TRY_LATER"
-    parsed["intent"] = intent
-
-    if "items" not in parsed or not isinstance(parsed["items"], list) or len(parsed["items"]) == 0:
-        parsed["items"] = [{"name": parsed.get("summary") or "Screenshot Item", "type": None}]
-
-    return VisionExtraction(**parsed)
+        parsed = _parse_json_response(_call_gemini(image_bytes, safe_mime, strict_retry=True))
+    return _normalize_extraction(parsed)
 
 
-@retry(
-    wait=wait_random_exponential(multiplier=1, min=1, max=10),
-    stop=stop_after_attempt(3),
-    reraise=False,
-)
+@retry(wait=wait_random_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(3), reraise=False)
 def extract_intent_from_metadata(
     extracted_text: str,
     entities: dict | None = None,
     app_source: str | None = None,
+    ocr_blocks: list[dict] | None = None,
 ) -> VisionExtraction:
-    """
-    Privacy-First Text-Only Classification:
-    Calls Gemini using ONLY on-device extracted text and entities.
-    Zero image bytes are transmitted to the LLM.
-    """
+    """Privacy-first classifier. No screenshot pixels are sent to the LLM."""
     client = _get_client()
     model = os.environ.get("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
 
     entities_str = json.dumps(entities or {}, ensure_ascii=False)
-    app_str = f"Source Application: {app_source}\n" if app_source else ""
+    blocks = ocr_blocks or []
+    blocks_str = json.dumps(blocks, ensure_ascii=False, separators=(",", ":")) if blocks else "[]"
+    app_str = app_source or "Unknown"
 
     text_prompt = f"""{SYSTEM_PROMPT}
 
-{app_str}On-Device Extracted Text:
+Source Application / Android package:
+{app_str}
+
+On-Device Extracted Text:
 \"\"\"{extracted_text}\"\"\"
 
 Detected Entities:
 {entities_str}
 
-IMPORTANT FOR OCR-ONLY INPUT:
-The OCR text may contain the entire phone screen in reading order, including status bar text, social-media usernames, audio labels,
-engagement counts, captions, adjacent posts, and navigation. Reconstruct the likely visual hierarchy from the text and choose the
-single primary save target unless there is clear evidence of a genuine multi-item recommendation list.
+OCR BLOCKS WITH NORMALIZED SCREEN GEOMETRY:
+{blocks_str}
+
+GEOMETRY GUIDANCE:
+- top near 0 is top of screen; top near 1 is bottom.
+- left near 0 is left edge; left near 1 is right edge.
+- Larger width/height usually means visually more prominent content.
+- Prefer blocks centered roughly within the middle 70% of the screen when they form a coherent recommendation/title/card.
+- Down-rank tiny status-bar/navigation/audio/user-handle blocks near screen edges unless they are clearly the saved subject.
+- If geometry conflicts with plain OCR reading order, trust semantic visual grouping implied by geometry.
+- Still create multiple memory items only for a genuine list of peer items.
 """
 
     response = client.models.generate_content(
         model=model,
         contents=[text_prompt],
-        config=types.GenerateContentConfig(
-            temperature=0.15,
-            response_mime_type="application/json",
-        ),
+        config=types.GenerateContentConfig(temperature=0.12, response_mime_type="application/json"),
     )
 
-    raw = response.text
     try:
-        parsed = _parse_json_response(raw)
+        parsed = _parse_json_response(response.text)
     except Exception:
         parsed = {
             "intent": "TRY_LATER",
@@ -185,12 +165,4 @@ single primary save target unless there is clear evidence of a genuine multi-ite
             "extracted_text": extracted_text,
         }
 
-    intent = parsed.get("intent", "").upper().strip()
-    if intent not in VALID_INTENTS:
-        intent = "TRY_LATER"
-    parsed["intent"] = intent
-
-    if "items" not in parsed or not isinstance(parsed["items"], list) or len(parsed["items"]) == 0:
-        parsed["items"] = [{"name": parsed.get("summary") or "Screenshot Item", "type": None}]
-
-    return VisionExtraction(**parsed)
+    return _normalize_extraction(parsed, extracted_text)
