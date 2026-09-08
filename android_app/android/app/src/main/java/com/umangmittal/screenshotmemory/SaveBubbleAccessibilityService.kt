@@ -2,13 +2,16 @@ package com.umangmittal.screenshotmemory
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityService.ScreenshotResult
+import android.content.ContentValues
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import android.view.Display
 import android.view.Gravity
 import android.view.MotionEvent
@@ -20,8 +23,6 @@ import android.widget.Toast
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import java.io.File
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -32,8 +33,8 @@ import kotlin.math.abs
 /**
  * Samhaal's explicit, user-triggered Save Bubble.
  * Accessibility is used only for the floating bubble and takeScreenshot() after a tap.
- * A private local screenshot copy is retained for memory-card reference; only OCR text
- * and metadata are sent to the backend.
+ * The captured screen is written once to Android MediaStore/Gallery. Samhaal keeps only
+ * the resulting content URI as a local reference; only OCR text and metadata go upstream.
  */
 class SaveBubbleAccessibilityService : AccessibilityService() {
 
@@ -51,7 +52,6 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
   private var removeTargetParams: WindowManager.LayoutParams? = null
   private val mainHandler = Handler(Looper.getMainLooper())
   private var busy = false
-  private var currentLocalScreenshotPath: String? = null
 
   override fun onServiceConnected() {
     super.onServiceConnected()
@@ -251,7 +251,6 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     }
 
     busy = true
-    currentLocalScreenshotPath = null
     setBubbleState("…")
     bubble?.visibility = View.INVISIBLE
 
@@ -269,14 +268,14 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
 
           val eventId = UUID.randomUUID().toString()
           val capturedAt = isoNow()
-          val screenshotPath = savePrivateScreenshot(bitmap, eventId)
-          if (screenshotPath == null) {
+          val screenshotUri = saveScreenshotToGallery(bitmap, eventId)
+          if (screenshotUri == null) {
             bitmap.recycle()
-            finishWithError("Could not save a local screenshot reference.")
+            finishWithError("Could not save the screenshot to your gallery.")
             return
           }
-          currentLocalScreenshotPath = screenshotPath
-          runOnDeviceOcr(bitmap, eventId, capturedAt, screenshotPath)
+
+          runOnDeviceOcr(bitmap, eventId, capturedAt, screenshotUri)
         }
 
         override fun onFailure(errorCode: Int) {
@@ -286,18 +285,42 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     }, 120)
   }
 
-  private fun savePrivateScreenshot(bitmap: Bitmap, eventId: String): String? {
+  private fun saveScreenshotToGallery(bitmap: Bitmap, eventId: String): String? {
     return try {
-      val dir = File(filesDir, "samhaal_screenshots").apply { mkdirs() }
-      val file = File(dir, "$eventId.jpg")
-      FileOutputStream(file).use { output -> bitmap.compress(Bitmap.CompressFormat.JPEG, 88, output) }
-      file.absolutePath
+      val resolver = contentResolver
+      val values = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, "Samhaal_${System.currentTimeMillis()}_${eventId.take(8)}.jpg")
+        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+        put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Samhaal")
+        put(MediaStore.Images.Media.IS_PENDING, 1)
+      }
+
+      val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+      var success = false
+      try {
+        resolver.openOutputStream(uri)?.use { output ->
+          success = bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
+        }
+        if (!success) {
+          resolver.delete(uri, null, null)
+          return null
+        }
+
+        val publishValues = ContentValues().apply {
+          put(MediaStore.Images.Media.IS_PENDING, 0)
+        }
+        resolver.update(uri, publishValues, null, null)
+        uri.toString()
+      } catch (_: Exception) {
+        resolver.delete(uri, null, null)
+        null
+      }
     } catch (_: Exception) {
       null
     }
   }
 
-  private fun runOnDeviceOcr(bitmap: Bitmap, eventId: String, capturedAt: String, screenshotPath: String) {
+  private fun runOnDeviceOcr(bitmap: Bitmap, eventId: String, capturedAt: String, screenshotUri: String) {
     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     val image = InputImage.fromBitmap(bitmap, 0)
 
@@ -307,33 +330,32 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
         bitmap.recycle()
         val text = result.text.trim()
         if (text.isBlank()) {
-          finishWithError("No readable text found.")
+          finishWithError("No readable text found. Screenshot kept in your gallery.")
           return@addOnSuccessListener
         }
 
         try {
-          UploadHeadlessTaskService.enqueueText(this, text, eventId, capturedAt, screenshotPath)
+          UploadHeadlessTaskService.enqueueText(this, text, eventId, capturedAt, screenshotUri)
           mainHandler.postDelayed({
-            if (busy) finishWithError("Save timed out. Open Samhaal and try again.", deleteLocalFile = false)
+            if (busy) finishWithError("Save timed out. Screenshot is still in your gallery.")
           }, 60000)
         } catch (_: Exception) {
-          finishWithError("Open Samhaal and try again.")
+          finishWithError("Screenshot saved. Open Samhaal and try again.")
         }
       }
       .addOnFailureListener {
         recognizer.close()
         bitmap.recycle()
-        finishWithError("Could not read this screen.")
+        finishWithError("Could not read this screen. Screenshot kept in your gallery.")
       }
   }
 
   fun reportSaveResult(success: Boolean, message: String? = null) {
     if (!busy) return
-    if (success) finishWithSuccess() else finishWithError(message ?: "Could not save this screen.")
+    if (success) finishWithSuccess() else finishWithError(message ?: "Could not save this memory.")
   }
 
   private fun finishWithSuccess() {
-    currentLocalScreenshotPath = null
     bubble?.visibility = View.VISIBLE
     setBubbleState("✓")
     mainHandler.postDelayed({
@@ -342,11 +364,7 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     }, 1000)
   }
 
-  private fun finishWithError(message: String, deleteLocalFile: Boolean = true) {
-    if (deleteLocalFile) {
-      currentLocalScreenshotPath?.let { path -> try { File(path).delete() } catch (_: Exception) {} }
-      currentLocalScreenshotPath = null
-    }
+  private fun finishWithError(message: String) {
     bubble?.visibility = View.VISIBLE
     setBubbleState("!")
     Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
