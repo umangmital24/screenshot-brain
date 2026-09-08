@@ -365,7 +365,6 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
   private fun setBubbleState(value: String) {
     mainHandler.post {
       bubble?.text = value
-      bubble?.visibility = View.VISIBLE
     }
   }
 
