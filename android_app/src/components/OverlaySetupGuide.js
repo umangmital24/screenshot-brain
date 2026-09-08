@@ -5,7 +5,7 @@ import { colors } from '../theme'
 const STEPS = [
   ['1', 'Open Accessibility', 'Android will show its Accessibility settings. Find Samhaal in the installed services list.'],
   ['2', 'Turn on Samhaal', 'This lets Samhaal place the Save Bubble at the edge of your screen and capture only when you tap it.'],
-  ['3', 'Tap the bubble to save', 'Samhaal reads that screen with on-device OCR, sends only extracted text to your account, and discards the captured pixels.'],
+  ['3', 'Tap the bubble to save', 'Samhaal captures that screen, reads it with on-device OCR, and keeps a private local screenshot reference for your memory card. Only extracted text is sent to your account.'],
 ]
 
 export default function OverlaySetupGuide({ visible, onOpenSettings, onClose }) {
@@ -25,7 +25,7 @@ export default function OverlaySetupGuide({ visible, onOpenSettings, onClose }) 
           <View style={styles.disclosure}>
             <Text style={styles.disclosureTitle}>What Accessibility is used for</Text>
             <Text style={styles.disclosureBody}>
-              To show the floating Save Bubble and capture the current screen only after you tap it. Samhaal does not read passwords, keyboard input, or taps in other apps.
+              To show the floating Save Bubble and capture the current screen only after you tap it. Samhaal does not read passwords, keyboard input, or taps in other apps. The screenshot reference remains private on this device; only OCR text is sent to Samhaal.
             </Text>
           </View>
 
