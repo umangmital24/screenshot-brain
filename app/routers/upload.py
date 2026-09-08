@@ -18,10 +18,19 @@ MAX_IMAGE_SIZE_BYTES = 15 * 1024 * 1024
 MAX_OCR_TEXT_CHARS = 50_000
 
 
+class OcrBlock(BaseModel):
+    text: str = Field(..., min_length=1, max_length=1200)
+    left: float = Field(..., ge=0.0, le=1.0)
+    top: float = Field(..., ge=0.0, le=1.0)
+    width: float = Field(..., ge=0.0, le=1.0)
+    height: float = Field(..., ge=0.0, le=1.0)
+
+
 class ClientMetadataPayload(BaseModel):
     extracted_text: str = Field(..., min_length=1, max_length=MAX_OCR_TEXT_CHARS, description="On-device OCR extracted text")
     entities: dict | None = Field(default_factory=dict, description="Extracted URLs, phones, prices")
-    app_source: str | None = Field(None, max_length=120, description="Source app name if detected")
+    app_source: str | None = Field(None, max_length=120, description="Foreground source app/package if detected")
+    ocr_blocks: list[OcrBlock] = Field(default_factory=list, max_length=120, description="On-device OCR blocks with normalized screen geometry")
     image_storage_path: str | None = Field(None, max_length=500, description="Optional private storage path")
     client_event_id: str | None = Field(None, max_length=64, description="Client-generated idempotency key for retry-safe captures")
     captured_at: datetime | None = Field(None, description="Client capture timestamp")
@@ -191,6 +200,7 @@ async def process_on_device_metadata(
             text,
             payload.entities,
             payload.app_source,
+            [block.model_dump() for block in payload.ocr_blocks],
         )
 
         def _save_all_memories():
