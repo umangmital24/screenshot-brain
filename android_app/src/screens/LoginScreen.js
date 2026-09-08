@@ -42,7 +42,6 @@ export default function LoginScreen() {
       const response = await GoogleSignin.signIn()
       const idToken = response.data?.idToken ?? response.idToken
       if (!idToken) throw new Error('No ID token returned from Google')
-
       const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken })
       if (error) throw error
     } catch (err) {
@@ -84,32 +83,28 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={[
-          styles.demoSection,
-          compact && styles.demoSectionCompact,
-          veryCompact && styles.demoSectionVeryCompact,
-        ]}>
-          <View style={[styles.brandRow, compact && styles.brandRowCompact]}>
+        <View style={[styles.hero, compact && styles.heroCompact, veryCompact && styles.heroVeryCompact]}>
+          <View style={styles.brandRow}>
             <Text style={styles.brand}>Samhaal</Text>
-            {!veryCompact ? <Text style={styles.brandTag}>Remember what you save.</Text> : null}
+            <Text style={styles.brandTag}>Remember what you save.</Text>
           </View>
           <AuthProductDemo />
         </View>
 
-        <View style={[styles.authSection, compact && styles.authSectionCompact]}>
+        <View style={[styles.authSheet, compact && styles.authSheetCompact]}>
           <Text style={[styles.title, compact && styles.titleCompact]}>
             {isSignup ? 'Create your memory space.' : 'From screenshot to memory.'}
           </Text>
           <Text style={[styles.copy, compact && styles.copyCompact]}>
-            Save anything. Samhaal organizes it into a memory you can search and ask about later.
+            Save anything from any app. Samhaal turns it into a memory you can find and ask about later.
           </Text>
 
-          <TouchableOpacity style={styles.providerButton} onPress={handleGoogleSignIn} disabled={googleLoading} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.providerButton} onPress={handleGoogleSignIn} disabled={googleLoading} activeOpacity={0.82}>
             {googleLoading ? (
               <ActivityIndicator color={colors.text} />
             ) : (
               <View style={styles.providerButtonContent}>
-                <FontAwesome name="google" size={18} color="#4285F4" />
+                <View style={styles.providerIcon}><FontAwesome name="google" size={17} color="#4285F4" /></View>
                 <Text style={styles.providerButtonText}>Continue with Google</Text>
               </View>
             )}
@@ -121,10 +116,10 @@ export default function LoginScreen() {
               setEmailModeOpen((open) => !open)
               setMessage(null)
             }}
-            activeOpacity={0.8}
+            activeOpacity={0.82}
           >
             <View style={styles.providerButtonContent}>
-              <Ionicons name="mail-outline" size={19} color={colors.text} />
+              <View style={styles.providerIcon}><Ionicons name="mail-outline" size={18} color={colors.text} /></View>
               <Text style={styles.providerButtonText}>Continue with Email</Text>
             </View>
           </TouchableOpacity>
@@ -148,7 +143,6 @@ export default function LoginScreen() {
                 onChangeText={setPassword}
                 secureTextEntry
               />
-
               <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
                 {submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryButtonText}>{isSignup ? 'Create account' : 'Sign in'}</Text>}
               </TouchableOpacity>
@@ -164,15 +158,15 @@ export default function LoginScreen() {
               setMessage(null)
             }}
           >
-            <Text style={[styles.toggleText, compact && styles.toggleTextCompact]}>
+            <Text style={styles.toggleText}>
               {isSignup ? 'Already have an account? Sign in' : 'New to Samhaal? Create an account'}
             </Text>
           </TouchableOpacity>
 
           {!veryCompact ? (
-            <View style={[styles.privacyRow, compact && styles.privacyRowCompact]}>
-              <Text style={styles.privacyTitle}>Privacy-first by design</Text>
-              <Text style={styles.privacy}>Screens are read on-device first. Raw screenshots are not sent to AI by default.</Text>
+            <View style={styles.privacyRow}>
+              <Ionicons name="shield-checkmark-outline" size={13} color={colors.textMuted} />
+              <Text style={styles.privacy}>Raw screenshots are not sent to AI by default.</Text>
             </View>
           ) : null}
         </View>
@@ -182,35 +176,62 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#FAFAF9' },
-  scrollContent: { flexGrow: 1 },
-  demoSection: { backgroundColor: '#F5F5F4', borderBottomWidth: 1, borderBottomColor: colors.borderSubtle, paddingTop: Platform.OS === 'ios' ? 52 : 32, paddingBottom: 10, minHeight: 456 },
-  demoSectionCompact: { minHeight: 405, paddingTop: Platform.OS === 'ios' ? 44 : 24, paddingBottom: 6 },
-  demoSectionVeryCompact: { minHeight: 340, paddingTop: Platform.OS === 'ios' ? 36 : 18 },
-  brandRow: { paddingHorizontal: 22, marginBottom: 1 },
-  brandRowCompact: { paddingHorizontal: 20 },
-  brand: { fontSize: 13, fontWeight: '700', color: colors.text, letterSpacing: -0.1 },
-  brandTag: { fontSize: 10.5, color: colors.textFaint, marginTop: 3 },
-  authSection: { paddingHorizontal: 24, paddingTop: 26, paddingBottom: 32, backgroundColor: colors.canvas },
-  authSectionCompact: { paddingTop: 20, paddingBottom: 24, paddingHorizontal: 22 },
-  title: { fontSize: 26, lineHeight: 32, letterSpacing: -0.7, fontWeight: '700', color: colors.text },
-  titleCompact: { fontSize: 23, lineHeight: 28, letterSpacing: -0.55 },
-  copy: { fontSize: 13.5, color: colors.textMuted, lineHeight: 20, marginTop: 8, marginBottom: 21, maxWidth: 348 },
-  copyCompact: { fontSize: 12.8, lineHeight: 18.5, marginTop: 6, marginBottom: 16 },
-  providerButton: { minHeight: 50, borderWidth: 1, borderColor: colors.border, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  screen: { flex: 1, backgroundColor: '#F3F3F1' },
+  scrollContent: { flexGrow: 1, backgroundColor: '#F3F3F1' },
+  hero: {
+    minHeight: 510,
+    backgroundColor: '#F3F3F1',
+    paddingTop: Platform.OS === 'ios' ? 54 : 30,
+    paddingBottom: 40,
+  },
+  heroCompact: { minHeight: 455, paddingTop: Platform.OS === 'ios' ? 44 : 22, paddingBottom: 34 },
+  heroVeryCompact: { minHeight: 400, paddingTop: Platform.OS === 'ios' ? 36 : 16, paddingBottom: 28 },
+  brandRow: { paddingHorizontal: 24, marginBottom: 8 },
+  brand: { fontSize: 14, fontWeight: '800', color: colors.text, letterSpacing: -0.2 },
+  brandTag: { fontSize: 11, color: colors.textFaint, marginTop: 3 },
+
+  authSheet: {
+    marginTop: -28,
+    backgroundColor: colors.canvas,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 30,
+    paddingBottom: 32,
+    minHeight: 350,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 3,
+  },
+  authSheetCompact: { paddingTop: 24, paddingBottom: 24 },
+  title: { fontSize: 29, lineHeight: 34, letterSpacing: -0.9, fontWeight: '800', color: colors.text, maxWidth: 355 },
+  titleCompact: { fontSize: 26, lineHeight: 31 },
+  copy: { fontSize: 13.5, color: colors.textMuted, lineHeight: 20, marginTop: 9, marginBottom: 22, maxWidth: 350 },
+  copyCompact: { marginBottom: 18 },
+
+  providerButton: {
+    height: 52,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: 15,
+  },
   emailProviderButton: { marginTop: 10 },
-  providerButtonContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  providerButtonText: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  emailForm: { marginTop: 13 },
-  input: { borderWidth: 1, borderColor: colors.border, borderRadius: 11, paddingVertical: 12.5, paddingHorizontal: 14, fontSize: 14, color: colors.text, backgroundColor: colors.surface, marginBottom: 9 },
-  primaryButton: { minHeight: 49, backgroundColor: colors.black, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 3 },
+  providerButtonContent: { flexDirection: 'row', alignItems: 'center' },
+  providerIcon: { width: 28, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+  providerButtonText: { color: colors.text, fontSize: 14, fontWeight: '650' },
+
+  emailForm: { marginTop: 14 },
+  input: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 14, fontSize: 14, color: colors.text, backgroundColor: colors.surface, marginBottom: 9 },
+  primaryButton: { minHeight: 50, backgroundColor: colors.black, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   primaryButtonText: { color: colors.white, fontSize: 14, fontWeight: '700' },
   message: { fontSize: 12.5, color: colors.success, marginTop: 11, lineHeight: 18 },
   messageError: { color: colors.danger },
-  toggleText: { fontSize: 12.5, color: colors.textSecondary, textAlign: 'center', marginTop: 16, fontWeight: '500' },
-  toggleTextCompact: { marginTop: 13 },
-  privacyRow: { alignItems: 'center', marginTop: 22 },
-  privacyRowCompact: { marginTop: 16 },
-  privacyTitle: { fontSize: 10.5, color: colors.textSecondary, fontWeight: '700' },
-  privacy: { marginTop: 4, fontSize: 10.5, color: colors.textFaint, textAlign: 'center', lineHeight: 15, maxWidth: 310 },
+  toggleText: { fontSize: 12.5, color: colors.textSecondary, textAlign: 'center', marginTop: 18, fontWeight: '500' },
+  privacyRow: { marginTop: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  privacy: { fontSize: 10.5, color: colors.textFaint },
 })
