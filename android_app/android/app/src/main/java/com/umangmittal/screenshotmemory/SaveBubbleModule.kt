@@ -39,6 +39,16 @@ class SaveBubbleModule(private val reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
+  fun isVisible(promise: Promise) {
+    promise.resolve(SaveBubbleAccessibilityService.current?.isBubbleVisible() == true)
+  }
+
+  @ReactMethod
+  fun showBubble() {
+    SaveBubbleAccessibilityService.current?.showBubbleFromApp()
+  }
+
+  @ReactMethod
   fun reportSaveResult(success: Boolean, message: String?) {
     SaveBubbleAccessibilityService.current?.reportSaveResult(success, message)
   }
