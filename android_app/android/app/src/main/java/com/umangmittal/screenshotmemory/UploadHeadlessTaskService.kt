@@ -17,12 +17,16 @@ class UploadHeadlessTaskService : HeadlessJsTaskService() {
       clientEventId: String,
       capturedAt: String,
       screenshotUri: String,
+      sourceApp: String,
+      ocrBlocksJson: String,
     ) {
       val intent = Intent(context, UploadHeadlessTaskService::class.java)
       intent.putExtra("extractedText", extractedText)
       intent.putExtra("clientEventId", clientEventId)
       intent.putExtra("capturedAt", capturedAt)
       intent.putExtra("screenshotUri", screenshotUri)
+      intent.putExtra("sourceApp", sourceApp)
+      intent.putExtra("ocrBlocksJson", ocrBlocksJson)
       context.startService(intent)
     }
 
@@ -46,6 +50,8 @@ class UploadHeadlessTaskService : HeadlessJsTaskService() {
     extras.getString("clientEventId")?.let { data.putString("clientEventId", it) }
     extras.getString("capturedAt")?.let { data.putString("capturedAt", it) }
     extras.getString("screenshotUri")?.let { data.putString("screenshotUri", it) }
+    extras.getString("sourceApp")?.let { data.putString("sourceApp", it) }
+    extras.getString("ocrBlocksJson")?.let { data.putString("ocrBlocksJson", it) }
 
     return HeadlessJsTaskConfig(
       "UploadScreenshotTask",
