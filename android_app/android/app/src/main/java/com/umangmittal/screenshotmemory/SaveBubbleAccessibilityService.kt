@@ -23,6 +23,8 @@ import android.widget.Toast
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import org.json.JSONArray
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -32,9 +34,12 @@ import kotlin.math.abs
 
 /**
  * Samhaal's explicit, user-triggered Save Bubble.
- * Accessibility is used only for the floating bubble and takeScreenshot() after a tap.
+ * Accessibility is used only for the floating bubble, identifying the foreground package,
+ * and takeScreenshot() after a tap. The accessibility node tree is never read.
+ *
  * The captured screen is written once to Android MediaStore/Gallery. Samhaal keeps only
- * the resulting content URI as a local reference; only OCR text and metadata go upstream.
+ * the resulting content URI as a local reference. OCR runs locally; only OCR text,
+ * lightweight block geometry, source-app metadata and capture metadata go upstream.
  */
 class SaveBubbleAccessibilityService : AccessibilityService() {
 
@@ -52,6 +57,7 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
   private var removeTargetParams: WindowManager.LayoutParams? = null
   private val mainHandler = Handler(Looper.getMainLooper())
   private var busy = false
+  private var foregroundPackage: String? = null
 
   override fun onServiceConnected() {
     super.onServiceConnected()
@@ -69,7 +75,13 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     super.onDestroy()
   }
 
-  override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+  override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+    val pkg = event?.packageName?.toString()?.trim()
+    if (!pkg.isNullOrBlank() && pkg != packageName) {
+      foregroundPackage = pkg
+    }
+  }
+
   override fun onInterrupt() {}
 
   private fun prefs() = getSharedPreferences(PREFS, MODE_PRIVATE)
@@ -254,6 +266,8 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     setBubbleState("…")
     bubble?.visibility = View.INVISIBLE
 
+    val sourceApp = sourceAppLabel(foregroundPackage)
+
     mainHandler.postDelayed({
       takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
         override fun onSuccess(screenshot: ScreenshotResult) {
@@ -275,7 +289,7 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
             return
           }
 
-          runOnDeviceOcr(bitmap, eventId, capturedAt, screenshotUri)
+          runOnDeviceOcr(bitmap, eventId, capturedAt, screenshotUri, sourceApp)
         }
 
         override fun onFailure(errorCode: Int) {
@@ -320,22 +334,38 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     }
   }
 
-  private fun runOnDeviceOcr(bitmap: Bitmap, eventId: String, capturedAt: String, screenshotUri: String) {
+  private fun runOnDeviceOcr(
+    bitmap: Bitmap,
+    eventId: String,
+    capturedAt: String,
+    screenshotUri: String,
+    sourceApp: String,
+  ) {
     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     val image = InputImage.fromBitmap(bitmap, 0)
 
     recognizer.process(image)
       .addOnSuccessListener { result ->
+        val text = result.text.trim()
+        val blocksJson = buildOcrBlocksJson(result.textBlocks, bitmap.width, bitmap.height)
         recognizer.close()
         bitmap.recycle()
-        val text = result.text.trim()
+
         if (text.isBlank()) {
           finishWithError("No readable text found. Screenshot kept in your gallery.")
           return@addOnSuccessListener
         }
 
         try {
-          UploadHeadlessTaskService.enqueueText(this, text, eventId, capturedAt, screenshotUri)
+          UploadHeadlessTaskService.enqueueText(
+            this,
+            text,
+            eventId,
+            capturedAt,
+            screenshotUri,
+            sourceApp,
+            blocksJson,
+          )
           mainHandler.postDelayed({
             if (busy) finishWithError("Save timed out. Screenshot is still in your gallery.")
           }, 60000)
@@ -350,9 +380,53 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
       }
   }
 
+  private fun buildOcrBlocksJson(
+    blocks: List<com.google.mlkit.vision.text.Text.TextBlock>,
+    imageWidth: Int,
+    imageHeight: Int,
+  ): String {
+    val array = JSONArray()
+    if (imageWidth <= 0 || imageHeight <= 0) return array.toString()
+
+    blocks.take(120).forEach { block ->
+      val box = block.boundingBox ?: return@forEach
+      val item = JSONObject()
+      item.put("text", block.text.take(1200))
+      item.put("left", box.left.toDouble() / imageWidth)
+      item.put("top", box.top.toDouble() / imageHeight)
+      item.put("width", box.width().toDouble() / imageWidth)
+      item.put("height", box.height().toDouble() / imageHeight)
+      array.put(item)
+    }
+    return array.toString()
+  }
+
+  private fun sourceAppLabel(packageName: String?): String {
+    val pkg = packageName?.trim().orEmpty()
+    if (pkg.isBlank()) return "Unknown Android app"
+
+    val friendly = when (pkg) {
+      "com.instagram.android" -> "Instagram"
+      "com.linkedin.android" -> "LinkedIn"
+      "com.google.android.youtube" -> "YouTube"
+      "com.android.chrome" -> "Chrome"
+      "com.amazon.mShop.android.shopping" -> "Amazon"
+      "net.one97.paytm" -> "Paytm"
+      "in.swiggy.android" -> "Swiggy"
+      "com.application.zomato" -> "Zomato"
+      else -> null
+    }
+    return if (friendly != null) "$friendly ($pkg)" else pkg
+  }
+
   fun reportSaveResult(success: Boolean, message: String? = null) {
     if (!busy) return
-    if (success) finishWithSuccess() else finishWithError(message ?: "Could not save this memory.")
+    if (success) {
+      if (!message.isNullOrBlank()) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+      finishWithSuccess()
+    } else {
+      finishWithError(message ?: "Could not save this memory.")
+    }
   }
 
   private fun finishWithSuccess() {
