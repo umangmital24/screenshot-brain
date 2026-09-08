@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { GoogleSignin } from '@react-native-google-signin/google-signin'
+import { FontAwesome, Ionicons } from '@expo/vector-icons'
 import { supabase } from '../supabaseClient'
 import { colors } from '../theme'
 import AuthProductDemo from '../components/AuthProductDemo'
@@ -26,6 +27,7 @@ export default function LoginScreen() {
   const veryCompact = height < 690
 
   const [mode, setMode] = useState('signin')
+  const [emailModeOpen, setEmailModeOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState(null)
@@ -102,43 +104,63 @@ export default function LoginScreen() {
             Save anything. Samhaal organizes it into a memory you can search and ask about later.
           </Text>
 
-          <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn} disabled={googleLoading} activeOpacity={0.8}>
-            {googleLoading ? <ActivityIndicator color={colors.text} /> : <Text style={styles.googleButtonText}>Continue with Google</Text>}
+          <TouchableOpacity style={styles.providerButton} onPress={handleGoogleSignIn} disabled={googleLoading} activeOpacity={0.8}>
+            {googleLoading ? (
+              <ActivityIndicator color={colors.text} />
+            ) : (
+              <View style={styles.providerButtonContent}>
+                <FontAwesome name="google" size={18} color="#4285F4" />
+                <Text style={styles.providerButtonText}>Continue with Google</Text>
+              </View>
+            )}
           </TouchableOpacity>
 
-          <View style={[styles.dividerRow, compact && styles.dividerRowCompact]}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor={colors.textFaint}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor={colors.textFaint}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-
-          <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
-            {submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryButtonText}>{isSignup ? 'Create account' : 'Sign in'}</Text>}
+          <TouchableOpacity
+            style={[styles.providerButton, styles.emailProviderButton]}
+            onPress={() => {
+              setEmailModeOpen((open) => !open)
+              setMessage(null)
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.providerButtonContent}>
+              <Ionicons name="mail-outline" size={19} color={colors.text} />
+              <Text style={styles.providerButtonText}>Continue with Email</Text>
+            </View>
           </TouchableOpacity>
+
+          {emailModeOpen ? (
+            <View style={styles.emailForm}>
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor={colors.textFaint}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor={colors.textFaint}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+
+              <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
+                {submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryButtonText}>{isSignup ? 'Create account' : 'Sign in'}</Text>}
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
           {message && <Text style={[styles.message, message.error && styles.messageError]}>{message.text}</Text>}
 
           <TouchableOpacity
             onPress={() => {
               setMode((m) => (m === 'signin' ? 'signup' : 'signin'))
+              setEmailModeOpen(true)
               setMessage(null)
             }}
           >
@@ -175,12 +197,11 @@ const styles = StyleSheet.create({
   titleCompact: { fontSize: 23, lineHeight: 28, letterSpacing: -0.55 },
   copy: { fontSize: 13.5, color: colors.textMuted, lineHeight: 20, marginTop: 8, marginBottom: 21, maxWidth: 348 },
   copyCompact: { fontSize: 12.8, lineHeight: 18.5, marginTop: 6, marginBottom: 16 },
-  googleButton: { minHeight: 50, borderWidth: 1, borderColor: colors.border, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
-  googleButtonText: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 15, gap: 10 },
-  dividerRowCompact: { marginVertical: 12 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.borderSubtle },
-  dividerText: { fontSize: 11, color: colors.textFaint },
+  providerButton: { minHeight: 50, borderWidth: 1, borderColor: colors.border, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  emailProviderButton: { marginTop: 10 },
+  providerButtonContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  providerButtonText: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  emailForm: { marginTop: 13 },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: 11, paddingVertical: 12.5, paddingHorizontal: 14, fontSize: 14, color: colors.text, backgroundColor: colors.surface, marginBottom: 9 },
   primaryButton: { minHeight: 49, backgroundColor: colors.black, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 3 },
   primaryButtonText: { color: colors.white, fontSize: 14, fontWeight: '700' },
