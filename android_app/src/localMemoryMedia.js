@@ -1,11 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-const KEY = 'samhaalLocalMemoryMediaV1'
-
-function toFileUri(path) {
-  if (!path) return null
-  return path.includes('://') ? path : `file://${path}`
-}
+const KEY = 'samhaalLocalMemoryMediaV2'
 
 export async function getLocalMemoryMedia() {
   try {
@@ -16,15 +11,14 @@ export async function getLocalMemoryMedia() {
   }
 }
 
-export async function saveLocalScreenshotReferences(memories = [], screenshotPath, screenshotId = null) {
-  if (!screenshotPath || !Array.isArray(memories) || memories.length === 0) return
+export async function saveLocalScreenshotReferences(memories = [], screenshotUri, screenshotId = null) {
+  if (!screenshotUri || !Array.isArray(memories) || memories.length === 0) return
   const media = await getLocalMemoryMedia()
-  const uri = toFileUri(screenshotPath)
 
   for (const memory of memories) {
     if (!memory?.id) continue
     media[memory.id] = {
-      uri,
+      uri: screenshotUri,
       screenshot_id: screenshotId || memory.screenshot_id || null,
       saved_at: new Date().toISOString(),
     }
