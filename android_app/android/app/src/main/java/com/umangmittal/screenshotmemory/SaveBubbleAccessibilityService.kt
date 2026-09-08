@@ -20,53 +20,66 @@ import android.widget.Toast
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import java.util.UUID
 import kotlin.math.abs
 
 /**
  * Samhaal's explicit, user-triggered Save Bubble.
- *
- * The service does not inspect the accessibility node tree and does not react to
- * other apps' events. Accessibility is used only for:
- *  1) TYPE_ACCESSIBILITY_OVERLAY for the edge bubble
- *  2) takeScreenshot() after the user taps that bubble
- *
- * Screenshot pixels stay in memory. ML Kit OCR runs locally and only recognized
- * text is forwarded to the authenticated JS headless task.
+ * Accessibility is used only for the floating bubble and takeScreenshot() after a tap.
+ * A private local screenshot copy is retained for memory-card reference; only OCR text
+ * and metadata are sent to the backend.
  */
 class SaveBubbleAccessibilityService : AccessibilityService() {
 
   companion object {
     @Volatile var isConnected: Boolean = false
     @Volatile var current: SaveBubbleAccessibilityService? = null
+    private const val PREFS = "samhaal_save_bubble"
+    private const val KEY_HIDDEN = "bubble_hidden"
   }
 
   private lateinit var windowManager: WindowManager
   private var bubble: TextView? = null
   private var bubbleParams: WindowManager.LayoutParams? = null
+  private var removeTarget: TextView? = null
+  private var removeTargetParams: WindowManager.LayoutParams? = null
   private val mainHandler = Handler(Looper.getMainLooper())
   private var busy = false
+  private var currentLocalScreenshotPath: String? = null
 
   override fun onServiceConnected() {
     super.onServiceConnected()
     isConnected = true
     current = this
     windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-    showBubble()
+    if (!isHiddenByUser()) showBubble()
   }
 
   override fun onDestroy() {
-    removeBubble()
+    removeBubble(false)
+    hideRemoveTarget()
     isConnected = false
     if (current === this) current = null
     super.onDestroy()
   }
 
-  override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-    // Intentionally unused. Samhaal does not inspect screen content continuously.
-  }
+  override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+  override fun onInterrupt() {}
 
-  override fun onInterrupt() {
-    // No continuous accessibility work to interrupt.
+  private fun prefs() = getSharedPreferences(PREFS, MODE_PRIVATE)
+  private fun isHiddenByUser(): Boolean = prefs().getBoolean(KEY_HIDDEN, false)
+
+  fun isBubbleVisible(): Boolean = bubble != null
+
+  fun showBubbleFromApp() {
+    prefs().edit().putBoolean(KEY_HIDDEN, false).apply()
+    showBubble()
   }
 
   private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
@@ -89,18 +102,23 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
       contentDescription = "Save this screen to Samhaal"
     }
 
+    val screenWidth = resources.displayMetrics.widthPixels
+    val screenHeight = resources.displayMetrics.heightPixels
+    val size = dp(52)
+    val margin = dp(10)
+
     val params = WindowManager.LayoutParams(
-      dp(52),
-      dp(52),
+      size,
+      size,
       WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
       PixelFormat.TRANSLUCENT,
     ).apply {
-      gravity = Gravity.END or Gravity.CENTER_VERTICAL
-      x = dp(10)
-      y = 0
+      gravity = Gravity.TOP or Gravity.START
+      x = (screenWidth - size - margin).coerceAtLeast(margin)
+      y = ((screenHeight - size) / 2).coerceAtLeast(margin)
     }
 
     attachDragAndTap(view, params)
@@ -117,6 +135,11 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     var moved = false
 
     view.setOnTouchListener { _, event ->
+      val screenWidth = resources.displayMetrics.widthPixels
+      val screenHeight = resources.displayMetrics.heightPixels
+      val size = dp(52)
+      val margin = dp(8)
+
       when (event.action) {
         MotionEvent.ACTION_DOWN -> {
           initialX = params.x
@@ -129,20 +152,95 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
         MotionEvent.ACTION_MOVE -> {
           val dx = (event.rawX - initialTouchX).toInt()
           val dy = (event.rawY - initialTouchY).toInt()
-          if (abs(dx) > dp(4) || abs(dy) > dp(4)) moved = true
-          // Gravity.END means increasing x moves inward from the right edge.
-          params.x = (initialX - dx).coerceAtLeast(0)
-          params.y = initialY + dy
+          if (abs(dx) > dp(4) || abs(dy) > dp(4)) {
+            moved = true
+            showRemoveTarget()
+          }
+
+          params.x = (initialX + dx).coerceIn(margin, (screenWidth - size - margin).coerceAtLeast(margin))
+          params.y = (initialY + dy).coerceIn(margin, (screenHeight - size - margin).coerceAtLeast(margin))
           try { windowManager.updateViewLayout(view, params) } catch (_: Exception) {}
+          updateRemoveTargetHighlight(event.rawX, event.rawY)
           true
         }
         MotionEvent.ACTION_UP -> {
-          if (!moved) captureCurrentScreen()
+          if (!moved) {
+            hideRemoveTarget()
+            captureCurrentScreen()
+          } else if (isOverRemoveTarget(event.rawX, event.rawY)) {
+            hideRemoveTarget()
+            hideBubbleByUser()
+          } else {
+            hideRemoveTarget()
+            snapToNearestEdge(view, params, event.rawX)
+          }
           true
         }
         else -> false
       }
     }
+  }
+
+  private fun snapToNearestEdge(view: View, params: WindowManager.LayoutParams, rawX: Float) {
+    val screenWidth = resources.displayMetrics.widthPixels
+    val size = dp(52)
+    val margin = dp(10)
+    val targetX = if (rawX < screenWidth / 2f) margin else (screenWidth - size - margin).coerceAtLeast(margin)
+    params.x = targetX
+    try { windowManager.updateViewLayout(view, params) } catch (_: Exception) {}
+  }
+
+  private fun showRemoveTarget() {
+    if (removeTarget != null) return
+    val target = TextView(this).apply {
+      text = "×\nRemove"
+      textSize = 12f
+      setTextColor(Color.WHITE)
+      gravity = Gravity.CENTER
+      background = circle(Color.rgb(39, 39, 42))
+      elevation = dp(12).toFloat()
+    }
+    val params = WindowManager.LayoutParams(
+      dp(76),
+      dp(76),
+      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+      PixelFormat.TRANSLUCENT,
+    ).apply {
+      gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+      y = dp(28)
+    }
+    windowManager.addView(target, params)
+    removeTarget = target
+    removeTargetParams = params
+  }
+
+  private fun isOverRemoveTarget(rawX: Float, rawY: Float): Boolean {
+    val screenWidth = resources.displayMetrics.widthPixels
+    val screenHeight = resources.displayMetrics.heightPixels
+    return abs(rawX - screenWidth / 2f) <= dp(90) && rawY >= screenHeight - dp(135)
+  }
+
+  private fun updateRemoveTargetHighlight(rawX: Float, rawY: Float) {
+    removeTarget?.background = if (isOverRemoveTarget(rawX, rawY)) {
+      circle(Color.rgb(220, 38, 38))
+    } else {
+      circle(Color.rgb(39, 39, 42))
+    }
+  }
+
+  private fun hideRemoveTarget() {
+    removeTarget?.let {
+      try { windowManager.removeView(it) } catch (_: Exception) {}
+    }
+    removeTarget = null
+    removeTargetParams = null
+  }
+
+  private fun hideBubbleByUser() {
+    prefs().edit().putBoolean(KEY_HIDDEN, true).apply()
+    removeBubble(false)
+    Toast.makeText(this, "Save Bubble hidden. Open Samhaal to show it again.", Toast.LENGTH_SHORT).show()
   }
 
   private fun captureCurrentScreen() {
@@ -153,19 +251,15 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     }
 
     busy = true
+    currentLocalScreenshotPath = null
     setBubbleState("…")
-
-    // Hide the accessibility overlay before capture so it does not appear in OCR.
     bubble?.visibility = View.INVISIBLE
+
     mainHandler.postDelayed({
       takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
         override fun onSuccess(screenshot: ScreenshotResult) {
           val buffer = screenshot.hardwareBuffer
-          val hardwareBitmap = try {
-            Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
-          } catch (_: Exception) {
-            null
-          }
+          val hardwareBitmap = try { Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace) } catch (_: Exception) { null }
           val bitmap = hardwareBitmap?.copy(Bitmap.Config.ARGB_8888, false)
           buffer.close()
           if (bitmap == null) {
@@ -173,7 +267,16 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
             return
           }
 
-          runOnDeviceOcr(bitmap)
+          val eventId = UUID.randomUUID().toString()
+          val capturedAt = isoNow()
+          val screenshotPath = savePrivateScreenshot(bitmap, eventId)
+          if (screenshotPath == null) {
+            bitmap.recycle()
+            finishWithError("Could not save a local screenshot reference.")
+            return
+          }
+          currentLocalScreenshotPath = screenshotPath
+          runOnDeviceOcr(bitmap, eventId, capturedAt, screenshotPath)
         }
 
         override fun onFailure(errorCode: Int) {
@@ -183,7 +286,18 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     }, 120)
   }
 
-  private fun runOnDeviceOcr(bitmap: Bitmap) {
+  private fun savePrivateScreenshot(bitmap: Bitmap, eventId: String): String? {
+    return try {
+      val dir = File(filesDir, "samhaal_screenshots").apply { mkdirs() }
+      val file = File(dir, "$eventId.jpg")
+      FileOutputStream(file).use { output -> bitmap.compress(Bitmap.CompressFormat.JPEG, 88, output) }
+      file.absolutePath
+    } catch (_: Exception) {
+      null
+    }
+  }
+
+  private fun runOnDeviceOcr(bitmap: Bitmap, eventId: String, capturedAt: String, screenshotPath: String) {
     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     val image = InputImage.fromBitmap(bitmap, 0)
 
@@ -198,11 +312,10 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
         }
 
         try {
-          UploadHeadlessTaskService.enqueueText(this, text)
-          // Keep the bubble busy until the authenticated JS task confirms the backend save.
+          UploadHeadlessTaskService.enqueueText(this, text, eventId, capturedAt, screenshotPath)
           mainHandler.postDelayed({
-            if (busy) finishWithError("Save timed out. Open Samhaal and try again.")
-          }, 30000)
+            if (busy) finishWithError("Save timed out. Open Samhaal and try again.", deleteLocalFile = false)
+          }, 60000)
         } catch (_: Exception) {
           finishWithError("Open Samhaal and try again.")
         }
@@ -216,14 +329,11 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
 
   fun reportSaveResult(success: Boolean, message: String? = null) {
     if (!busy) return
-    if (success) {
-      finishWithSuccess()
-    } else {
-      finishWithError(message ?: "Could not save this screen.")
-    }
+    if (success) finishWithSuccess() else finishWithError(message ?: "Could not save this screen.")
   }
 
   private fun finishWithSuccess() {
+    currentLocalScreenshotPath = null
     bubble?.visibility = View.VISIBLE
     setBubbleState("✓")
     mainHandler.postDelayed({
@@ -232,7 +342,11 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     }, 1000)
   }
 
-  private fun finishWithError(message: String) {
+  private fun finishWithError(message: String, deleteLocalFile: Boolean = true) {
+    if (deleteLocalFile) {
+      currentLocalScreenshotPath?.let { path -> try { File(path).delete() } catch (_: Exception) {} }
+      currentLocalScreenshotPath = null
+    }
     bubble?.visibility = View.VISIBLE
     setBubbleState("!")
     Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
@@ -242,6 +356,12 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     }, 1200)
   }
 
+  private fun isoNow(): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+    formatter.timeZone = TimeZone.getTimeZone("UTC")
+    return formatter.format(Date())
+  }
+
   private fun setBubbleState(value: String) {
     mainHandler.post {
       bubble?.text = value
@@ -249,11 +369,10 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     }
   }
 
-  private fun removeBubble() {
-    bubble?.let {
-      try { windowManager.removeView(it) } catch (_: Exception) {}
-    }
+  private fun removeBubble(resetPreference: Boolean) {
+    bubble?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
     bubble = null
     bubbleParams = null
+    if (resetPreference) prefs().edit().putBoolean(KEY_HIDDEN, false).apply()
   }
 }
