@@ -33,29 +33,32 @@ export async function fetchSummary() {
   return res.json()
 }
 
-export async function saveExtractedText(extractedText, appSource = 'android_save_bubble') {
+export async function saveExtractedText(
+  extractedText,
+  appSource = 'android_save_bubble',
+  captureMeta = {},
+) {
   requireApiBase()
   const cleanText = String(extractedText || '').trim()
-  console.log('[saveExtractedText] Starting save. Text length:', cleanText.length)
-  console.log('[saveExtractedText] Text preview:', cleanText.slice(0, 120))
   if (!cleanText) throw new Error('No readable text was found on this screen.')
 
   const headers = await authHeaders({ 'Content-Type': 'application/json' })
-  console.log('[saveExtractedText] Authorization header present:', !!headers.Authorization, headers.Authorization ? headers.Authorization.slice(0, 30) + '...' : 'NONE')
-  console.log('[saveExtractedText] POSTing to:', `${API_BASE}/screenshot/metadata`)
+  const body = {
+    extracted_text: cleanText,
+    entities: {},
+    app_source: appSource,
+  }
+
+  if (captureMeta.clientEventId) body.client_event_id = captureMeta.clientEventId
+  if (captureMeta.capturedAt) body.captured_at = captureMeta.capturedAt
+
   const res = await fetch(`${API_BASE}/screenshot/metadata`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      extracted_text: cleanText,
-      entities: {},
-      app_source: appSource,
-    }),
+    body: JSON.stringify(body),
   })
 
   const text = await res.text()
-  console.log('[saveExtractedText] Response status:', res.status, res.statusText)
-  console.log('[saveExtractedText] Response body:', text)
   let data
   try {
     data = JSON.parse(text)
