@@ -8,6 +8,7 @@ import { ShareIntentProvider } from 'expo-share-intent'
 import { supabase } from './src/supabaseClient'
 import { flushPendingCaptures } from './src/pendingCaptureQueue'
 import { colors } from './src/theme'
+import SplashScreen from './src/screens/SplashScreen'
 import LoginScreen from './src/screens/LoginScreen'
 import DashboardScreen from './src/screens/DashboardScreen'
 import ChatScreen from './src/screens/ChatScreen'
@@ -29,6 +30,7 @@ const Tab = createBottomTabNavigator()
 
 export default function App() {
   const [session, setSession] = useState(undefined)
+  const [splashDone, setSplashDone] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
@@ -48,6 +50,15 @@ export default function App() {
     })
     return () => sub.remove()
   }, [session])
+
+  if (!splashDone) {
+    return (
+      <>
+        <SplashScreen onDone={() => setSplashDone(true)} />
+        <StatusBar style="dark" />
+      </>
+    )
+  }
 
   if (session === undefined) {
     return (
