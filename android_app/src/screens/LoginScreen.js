@@ -8,11 +8,12 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native'
 import { GoogleSignin } from '@react-native-google-signin/google-signin'
-import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../supabaseClient'
 import { colors } from '../theme'
+import AuthProductDemo from '../components/AuthProductDemo'
 
 GoogleSignin.configure({
   webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
@@ -67,120 +68,141 @@ export default function LoginScreen() {
     }
   }
 
+  const isSignup = mode === 'signup'
+
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.content}>
-        <View style={styles.brandMark}>
-          <Ionicons name="sparkles-outline" size={20} color={colors.black} />
-        </View>
-        <Text style={styles.brand}>Samhaal</Text>
-        <Text style={styles.title}>{mode === 'signup' ? 'Create your memory space' : 'Welcome back'}</Text>
-        <Text style={styles.copy}>
-          Save screenshots with intent, then find them again by searching or simply asking.
-        </Text>
-
-        <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn} disabled={googleLoading}>
-          {googleLoading ? (
-            <ActivityIndicator color={colors.text} />
-          ) : (
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.demoSection}>
+          <View style={styles.brandRow}>
+            <Text style={styles.brand}>Samhaal</Text>
+            <Text style={styles.brandTag}>Remember what you save.</Text>
+          </View>
+          <AuthProductDemo />
         </View>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={colors.textFaint}
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor={colors.textFaint}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
-
-        <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} disabled={submitting}>
-          {submitting ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <Text style={styles.primaryButtonText}>{mode === 'signup' ? 'Create account' : 'Sign in'}</Text>
-          )}
-        </TouchableOpacity>
-
-        {message && <Text style={[styles.message, message.error && styles.messageError]}>{message.text}</Text>}
-
-        <TouchableOpacity
-          onPress={() => {
-            setMode((m) => (m === 'signin' ? 'signup' : 'signin'))
-            setMessage(null)
-          }}
-        >
-          <Text style={styles.toggleText}>
-            {mode === 'signin' ? 'New to Samhaal? Create an account' : 'Already have an account? Sign in'}
+        <View style={styles.authSection}>
+          <Text style={styles.title}>{isSignup ? 'Create your memory space.' : 'From screenshot to memory.'}</Text>
+          <Text style={styles.copy}>
+            Save anything. Samhaal organizes it into a memory you can search and ask about later.
           </Text>
-        </TouchableOpacity>
 
-        <Text style={styles.privacy}>Raw screenshots are processed on your device before Samhaal organizes them.</Text>
-      </View>
+          <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn} disabled={googleLoading} activeOpacity={0.8}>
+            {googleLoading ? (
+              <ActivityIndicator color={colors.text} />
+            ) : (
+              <Text style={styles.googleButtonText}>Continue with Google</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor={colors.textFaint}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor={colors.textFaint}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+
+          <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
+            {submitting ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <Text style={styles.primaryButtonText}>{isSignup ? 'Create account' : 'Sign in'}</Text>
+            )}
+          </TouchableOpacity>
+
+          {message && <Text style={[styles.message, message.error && styles.messageError]}>{message.text}</Text>}
+
+          <TouchableOpacity
+            onPress={() => {
+              setMode((m) => (m === 'signin' ? 'signup' : 'signin'))
+              setMessage(null)
+            }}
+          >
+            <Text style={styles.toggleText}>
+              {isSignup ? 'Already have an account? Sign in' : 'New to Samhaal? Create an account'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.privacyRow}>
+            <Text style={styles.privacyTitle}>Privacy-first by design</Text>
+            <Text style={styles.privacy}>
+              Screens are read on-device first. Raw screenshots are not sent to AI by default.
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.canvas, justifyContent: 'center', paddingHorizontal: 24 },
-  content: { width: '100%', maxWidth: 390, alignSelf: 'center' },
-  brandMark: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+  screen: { flex: 1, backgroundColor: '#FAFAF9' },
+  scrollContent: { flexGrow: 1 },
+  demoSection: {
+    backgroundColor: '#F5F5F4',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
+    paddingTop: Platform.OS === 'ios' ? 54 : 34,
+    paddingBottom: 10,
+    minHeight: 465,
+  },
+  brandRow: { paddingHorizontal: 22, marginBottom: 2 },
+  brand: { fontSize: 13, fontWeight: '700', color: colors.text },
+  brandTag: { fontSize: 10.5, color: colors.textFaint, marginTop: 3 },
+  authSection: { paddingHorizontal: 24, paddingTop: 27, paddingBottom: 34, backgroundColor: colors.canvas },
+  title: { fontSize: 26, lineHeight: 32, letterSpacing: -0.7, fontWeight: '700', color: colors.text },
+  copy: { fontSize: 13.5, color: colors.textMuted, lineHeight: 20, marginTop: 8, marginBottom: 22, maxWidth: 348 },
+  googleButton: {
+    minHeight: 50,
     borderWidth: 1,
     borderColor: colors.border,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
-  },
-  brand: { fontSize: 13, fontWeight: '700', letterSpacing: 0.2, color: colors.textSecondary, marginBottom: 14 },
-  title: { fontSize: 31, lineHeight: 37, letterSpacing: -0.8, fontWeight: '700', color: colors.text, marginBottom: 10 },
-  copy: { fontSize: 14, color: colors.textMuted, lineHeight: 21, marginBottom: 28, maxWidth: 350 },
-  googleButton: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
     backgroundColor: colors.surface,
   },
   googleButtonText: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 18, gap: 10 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 15, gap: 10 },
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.borderSubtle },
-  dividerText: { fontSize: 12, color: colors.textFaint },
+  dividerText: { fontSize: 11, color: colors.textFaint },
   input: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 10,
+    borderRadius: 11,
     paddingVertical: 13,
     paddingHorizontal: 14,
     fontSize: 14,
     color: colors.text,
     backgroundColor: colors.surface,
-    marginBottom: 10,
+    marginBottom: 9,
   },
-  primaryButton: { backgroundColor: colors.black, borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
+  primaryButton: { minHeight: 49, backgroundColor: colors.black, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 3 },
   primaryButtonText: { color: colors.white, fontSize: 14, fontWeight: '700' },
-  message: { fontSize: 13, color: colors.success, marginTop: 14, lineHeight: 18 },
+  message: { fontSize: 12.5, color: colors.success, marginTop: 12, lineHeight: 18 },
   messageError: { color: colors.danger },
-  toggleText: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', marginTop: 20 },
-  privacy: { fontSize: 11.5, color: colors.textFaint, textAlign: 'center', lineHeight: 17, marginTop: 34 },
+  toggleText: { fontSize: 12.5, color: colors.textSecondary, textAlign: 'center', marginTop: 17, fontWeight: '500' },
+  privacyRow: { alignItems: 'center', marginTop: 23 },
+  privacyTitle: { fontSize: 10.5, color: colors.textSecondary, fontWeight: '700' },
+  privacy: { marginTop: 4, fontSize: 10.5, color: colors.textFaint, textAlign: 'center', lineHeight: 15, maxWidth: 310 },
 })
