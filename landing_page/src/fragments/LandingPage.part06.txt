@@ -1,0 +1,117 @@
+                <button
+                  className="success-reset-btn"
+                  onClick={() => setWaitlistResult(null)}
+                >
+                  Register another email
+                </button>
+              </div>
+            ) : (
+              <form className="waitlist-form" onSubmit={handleWaitlistSubmit}>
+                <div className="waitlist-inputs-row">
+                  <input
+                    type="text"
+                    className="waitlist-input"
+                    placeholder="Your name"
+                    value={waitlistName}
+                    onChange={(e) => setWaitlistName(e.target.value)}
+                    required
+                  />
+                  <input
+                    type="email"
+                    className="waitlist-input"
+                    placeholder="your.email@company.com"
+                    value={waitlistEmail}
+                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                    required
+                  />
+                  <select
+                    className="waitlist-select"
+                    value={waitlistPlatform}
+                    onChange={(e) => setWaitlistPlatform(e.target.value)}
+                  >
+                    <option value="macos">macOS App</option>
+                    <option value="windows">Windows App</option>
+                    <option value="ios">iOS Mobile</option>
+                    <option value="android">Android Mobile</option>
+                    <option value="chrome">Chrome Extension</option>
+                  </select>
+                </div>
+
+                <div className="waitlist-submit-row">
+                  <button
+                    type="submit"
+                    className="waitlist-submit-btn"
+                    disabled={waitlistSubmitting}
+                  >
+                    <span>{waitlistSubmitting ? 'Reserving spot...' : 'Join Waitlist →'}</span>
+                  </button>
+                  <span className="waitlist-disclaimer">
+                    No spam ever. Unsubscribe anytime in 1 click.
+                  </span>
+                </div>
+              {waitlistError && <p className="waitlist-error-message" role="alert">{waitlistError}</p>}
+                </form>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Professional Pitch-Black Footer */}
+      <footer className="landing-footer">
+        <div className="landing-container">
+          <div className="footer-top">
+            <div className="footer-brand-column">
+              <div className="landing-brand">
+                <span className="landing-brand-icon"><LandingIcons.Brain /></span>
+                <span className="landing-brand-text">Samhaal</span>
+                <span className="landing-brand-sub">संभाल</span>
+              </div>
+              <p className="footer-tagline">
+                Aapne snap kiya, humne samhaala. Saving millions of camera rolls from becoming a screenshot graveyard.
+              </p>
+            </div>
+
+            <div className="footer-links-group">
+              <div className="footer-col">
+                <h4 className="footer-heading">Product</h4>
+                <a href="#problem" className="footer-link">The Graveyard Problem</a>
+                <a href="#how-it-works" className="footer-link">How It Works</a>
+                <a href="#features" className="footer-link">Features</a>
+                <a href="#early-access" className="footer-link">Early Access</a>
+                <a href="#faq" className="footer-link">FAQ</a>
+                <button className="footer-link-btn" onClick={(e) => handleNavClick(e, 'waitlist')}>Join Waitlist</button>
+              </div>
+
+              <div className="footer-col">
+                <h4 className="footer-heading">Trust & Security</h4>
+                <a href="#trust" className="footer-link">On-Device Processing</a>
+                <a href="#trust" className="footer-link">Row-Level Security</a>
+                <a href="#trust" className="footer-link">Privacy Guarantee</a>
+                <a href="#trust" className="footer-link">Terms of Service</a>
+              </div>
+
+              <div className="footer-col">
+                <h4 className="footer-heading">Platforms</h4>
+                <span className="footer-link-faint">Web Application (Live)</span>
+                <span className="footer-link-faint">macOS Desktop (Waitlist)</span>
+                <span className="footer-link-faint">Windows Desktop (Waitlist)</span>
+                <span className="footer-link-faint">iOS & Android (Waitlist)</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="footer-bottom">
+            <div className="footer-copyright">
+              © {new Date().getFullYear()} Samhaal (संभाल). All rights reserved.
+            </div>
+            <div className="footer-controls">
+              <button className="footer-scroll-top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+                Back to Top ↑
+              </button>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  )
+}
