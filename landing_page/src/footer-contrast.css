@@ -1,0 +1,44 @@
+/* High-contrast Samhaal footer */
+.landing-footer {
+  background: #000000 !important;
+  color: #ffffff;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.landing-footer .footer-brand-name,
+.landing-footer .footer-col-title,
+.landing-footer .footer-link,
+.landing-footer .footer-link-btn,
+.landing-footer .footer-copyright,
+.landing-footer .footer-scroll-top,
+.landing-footer a,
+.landing-footer button {
+  color: #ffffff;
+}
+
+.landing-footer .footer-brand-sub,
+.landing-footer .footer-link-faint,
+.landing-footer .footer-bottom,
+.landing-footer p,
+.landing-footer span {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.landing-footer .footer-link:hover,
+.landing-footer .footer-link-btn:hover,
+.landing-footer .footer-scroll-top:hover,
+.landing-footer a:hover,
+.landing-footer button:hover {
+  color: #ffffff;
+}
+
+.landing-footer .footer-bottom {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+.landing-footer .footer-brand-icon,
+.landing-footer .brand-icon {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: none;
+}
