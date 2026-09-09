@@ -1,0 +1,200 @@
+                      <span className="preview-time-tag">Captured Yesterday</span>
+                    </div>
+                    <h3 className="preview-item-title">Authentic Dhaba-Style Paneer Butter Masala</h3>
+                    <p className="preview-item-summary">250g malai paneer, 4 ripe tomatoes, soaked cashews, kasuri methi, butter & fresh cream. 20 min prep.</p>
+                    <div className="preview-extracted-bar">
+                      <span className="preview-pill"><LandingIcons.Check /> <span>6 Ingredients parsed</span></span>
+                      <span className="preview-pill link"><LandingIcons.ExternalLink /> <span>Open YouTube / Swiggy Minis</span></span>
+                    </div>
+                    <div className="preview-raw-ocr">
+                      OCR: "Add crushed kasuri methi and 1 tbsp butter right at the end for that authentic highway dhaba aroma."
+                    </div>
+                  </div>
+                  <div className="preview-sidebar-note">
+                    <h4>Cook the recipes you actually saved</h4>
+                    <p>Instagram reels and YouTube shorts cooking recipes are parsed into neat ingredient checklists. No more desperately scrolling past 2,000 photos in your gallery while cooking.</p>
+                  </div>
+                </div>
+              )}
+
+              {previewTab === 'ai' && (
+                <div className="preview-ai-showcase">
+                  <div className="preview-ai-bubble user">
+                    <span>What was that flat maintenance UPI ID and the Blue Tokai Wi-Fi password I saved?</span>
+                  </div>
+                  <div className="preview-ai-bubble ai">
+                    <p>Your flat maintenance UPI ID is <strong>greenwood.rwa@hdfcbank</strong> (Amount: ₹3,500 due on 10th). And the Blue Tokai Connaught Place Wi-Fi password is <strong>ColdBrew@2024</strong>.</p>
+                    <div className="preview-source-chip">
+                      <span className="preview-chip-badge">Source Screenshot</span>
+                      <span>FlatMaintenance_Notice_Oct.png</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* The Core Problem: The Screenshot Graveyard */}
+      <section id="problem" className="landing-section">
+        <div className="landing-container">
+          <div className="landing-section-header">
+            <span className="landing-section-tag">THE PROBLEM WE SOLVE</span>
+            <h2 className="landing-section-title">Your photo gallery is where good intentions go to die</h2>
+            <p className="landing-section-subtitle">
+              Every day, billions of screenshots are taken across the world. 95% of them are never looked at again.
+            </p>
+          </div>
+
+          <div className="graveyard-comparison-grid">
+            <div className="comparison-card is-graveyard">
+              <div className="card-badge-status">BEFORE SAMHAAL (THE GRAVEYARD)</div>
+              <h3 className="comparison-heading">The Black Hole of Screenshots</h3>
+              <ul className="comparison-points">
+                <li>
+                  <span className="point-cross">✕</span>
+                  <span><strong>3,000+ unorganized screenshots</strong> cluttering your photos alongside family pictures.</span>
+                </li>
+                <li>
+                  <span className="point-cross">✕</span>
+                  <span><strong>Lost information:</strong> You know you took a screenshot of that book, cafe, or code snippet, but can't find it.</span>
+                </li>
+                <li>
+                  <span className="point-cross">✕</span>
+                  <span><strong>Manual re-typing:</strong> Having to manually re-type tracking numbers, addresses, and phone numbers from images.</span>
+                </li>
+                <li>
+                  <span className="point-cross">✕</span>
+                  <span><strong>Zero action:</strong> You never read the article, you never cooked the meal, you never bought the shoes.</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="comparison-card is-living">
+              <div className="card-badge-status is-active">WITH SAMHAAL (LIVING MEMORY)</div>
+              <h3 className="comparison-heading">An Actionable Second Brain</h3>
+              <ul className="comparison-points">
+                <li>
+                  <span className="point-check">✓</span>
+                  <span><strong>Automated sorting:</strong> Immediately categorized into Read, Buy, Cook, Watch, Visit, Learn, and Apply.</span>
+                </li>
+                <li>
+                  <span className="point-check">✓</span>
+                  <span><strong>1-Tap smart actions:</strong> Tap to open URLs, dial phone numbers, copy text, or track prices.</span>
+                </li>
+                <li>
+                  <span className="point-check">✓</span>
+                  <span><strong>Ask Memory AI:</strong> Ask natural questions like <em>"Show me recipes with spinach"</em> and get instant cited answers.</span>
+                </li>
+                <li>
+                  <span className="point-check">✓</span>
+                  <span><strong>Completed toggle:</strong> Check off items when done so your visual memory stays clean and zen.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works (Mobile & Desktop with Selective Share vs Always-On Toggle) */}
+      <section id="how-it-works" className="landing-section landing-section-alt">
+        <div className="landing-container">
+          <div className="landing-section-header">
+            <span className="landing-section-tag">HOW IT WORKS</span>
+            <h2 className="landing-section-title">Designed for how you actually use your devices</h2>
+            <p className="landing-section-subtitle">
+              You choose between selective sharing or full automatic background capture on both phone and computer.
+            </p>
+          </div>
+
+          <div className="platforms-workflow-grid">
+            {/* Mobile Card */}
+            <div className="platform-card">
+              <div className="platform-header">
+                <span className="platform-icon"><LandingIcons.Phone /></span>
+                <span className="platform-title">On Mobile (Android & iOS)</span>
+              </div>
+              <p className="platform-sub">Three flexible ways to capture without interrupting your flow:</p>
+              
+              <div className="flow-options-list">
+                <div className="flow-option-item">
+                  <div className="flow-opt-header">
+                    <span className="flow-opt-number">01</span>
+                    <h4 className="flow-opt-title">Selective Share to Samhaal</h4>
+                  </div>
+                  <p className="flow-opt-desc">
+                    Take a screenshot as usual. When the preview appears, tap <strong>"Share to Samhaal"</strong> from your phone's share sheet. Only the screenshot you selected is indexed.
+                  </p>
+                </div>
+
+                <div className="flow-option-item">
+                  <div className="flow-opt-header">
+                    <span className="flow-opt-number">02</span>
+                    <h4 className="flow-opt-title">Keep as Normal Screenshot</h4>
+                  </div>
+                  <p className="flow-opt-desc">
+                    Don't want it in Samhaal? Do nothing! It stays a regular image in your camera roll and will never touch your memory catalog.
+                  </p>
+                </div>
+
+                <div className="flow-option-item is-highlight">
+                  <div className="flow-opt-header">
+                    <span className="flow-opt-number">03</span>
+                    <h4 className="flow-opt-title">Toggle: "Always-On Auto Capture"</h4>
+                  </div>
+                  <p className="flow-opt-desc">
+                    Want zero friction? Turn on the <strong>Always-On Background Listener</strong> in the mobile app. Every screenshot you snap is automatically processed by on-device OCR and indexed silently.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Desktop Card */}
+            <div className="platform-card">
+              <div className="platform-header">
+                <span className="platform-icon"><LandingIcons.Monitor /></span>
+                <span className="platform-title">On Computers (macOS & Windows)</span>
+              </div>
+              <p className="platform-sub">Seamless live ingestion tailored for fast keyboard workflows:</p>
+
+              <div className="flow-options-list">
+                <div className="flow-option-item is-highlight">
+                  <div className="flow-opt-header">
+                    <span className="flow-opt-number">01</span>
+                    <h4 className="flow-opt-title">Toggle: "Live Auto Capturing"</h4>
+                  </div>
+                  <p className="flow-opt-desc">
+                    Turn on the <strong>Live Capture Watcher</strong> in the desktop app or browser extension. Whenever you take a screenshot with your OS hotkeys, Samhaal auto-captures and catalogs it immediately.
+                  </p>
+                </div>
+
+                <div className="flow-option-item">
+                  <div className="flow-opt-header">
+                    <span className="flow-opt-number">02</span>
+                    <h4 className="flow-opt-title">Instant Clipboard Paste (⌘V / Ctrl+V)</h4>
+                  </div>
+                  <p className="flow-opt-desc">
+                    Snap a region (⌘⇧4 on Mac, Win+Shift+S on Windows) and press <strong>⌘V</strong> anywhere in Samhaal. It processes directly from your clipboard without saving a file to your desktop.
+                  </p>
+                </div>
+
+                <div className="flow-option-item">
+                  <div className="flow-opt-header">
+                    <span className="flow-opt-number">03</span>
+                    <h4 className="flow-opt-title">Drag & Drop Any Image</h4>
+                  </div>
+                  <p className="flow-opt-desc">
+                    Drag any PNG, JPG, or WebP screenshot directly onto the app window for instant breakdown and entity parsing.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Trust & Privacy Section in Simple Plain Language */}
+      <section id="trust" className="landing-section">
+        <div className="landing-container">
+          <div className="landing-section-header">
