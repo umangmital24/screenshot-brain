@@ -112,6 +112,8 @@ export default function ScrollMemoryJourney() {
   const [activeStep, setActiveStep] = useState(0)
 
   useEffect(() => {
+    if (window.matchMedia('(max-width: 768px)').matches) return undefined
+
     const nodes = Array.from(document.querySelectorAll('[data-journey-step]'))
     if (!nodes.length) return undefined
 
@@ -181,6 +183,27 @@ export default function ScrollMemoryJourney() {
 
       <div className="memory-journey-visual">
         <div className="journey-phone-wrap">
+          <div className="journey-mobile-copy" aria-live="polite">
+            <div className="journey-mobile-step-badge">{currentStep.number} · {currentStep.label}</div>
+            <h3>{currentStep.title}</h3>
+            <p>{currentStep.text}</p>
+            <a className="journey-mobile-cta" href="#waitlist">Get Early Access →</a>
+            <div className="journey-mobile-tabs" aria-label="Product walkthrough steps">
+              {STEPS.map((step, index) => (
+                <button
+                  key={step.id}
+                  type="button"
+                  className={`journey-mobile-tab ${activeStep === index ? 'is-active' : ''}`}
+                  onClick={() => setActiveStep(index)}
+                  aria-pressed={activeStep === index}
+                >
+                  {step.number}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="journey-phone-glow" aria-hidden="true" />
           <div className="journey-phone">
             <div className="journey-phone-speaker" />
             <PhoneScreen step={activeStep} />
@@ -188,10 +211,6 @@ export default function ScrollMemoryJourney() {
           <div className="journey-stage-caption">
             <span>{currentStep.number}</span>
             <strong>{currentStep.label}</strong>
-          </div>
-          <div className="journey-mobile-copy" aria-live="polite">
-            <h3>{currentStep.title}</h3>
-            <p>{currentStep.text}</p>
           </div>
         </div>
       </div>
