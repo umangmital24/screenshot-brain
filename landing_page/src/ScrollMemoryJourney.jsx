@@ -154,6 +154,8 @@ export default function ScrollMemoryJourney() {
     }
   }, [])
 
+  const currentStep = STEPS[activeStep]
+
   return (
     <div className="memory-journey" aria-label="How Samhaal turns a screenshot into a searchable memory">
       <div className="memory-journey-copy">
@@ -184,8 +186,12 @@ export default function ScrollMemoryJourney() {
             <PhoneScreen step={activeStep} />
           </div>
           <div className="journey-stage-caption">
-            <span>{STEPS[activeStep].number}</span>
-            <strong>{STEPS[activeStep].label}</strong>
+            <span>{currentStep.number}</span>
+            <strong>{currentStep.label}</strong>
+          </div>
+          <div className="journey-mobile-copy" aria-live="polite">
+            <h3>{currentStep.title}</h3>
+            <p>{currentStep.text}</p>
           </div>
         </div>
       </div>
