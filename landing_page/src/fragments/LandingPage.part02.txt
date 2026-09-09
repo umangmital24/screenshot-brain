@@ -1,0 +1,200 @@
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [mobileMenuOpen])
+
+  // Scrollspy to detect active section as user scrolls up or down
+  useEffect(() => {
+    let ticking = false
+
+    function updateActiveSection() {
+      const scrollY = window.scrollY
+      const windowHeight = window.innerHeight
+      const docHeight = document.documentElement.scrollHeight
+
+      // If scrolled near bottom of page -> activate waitlist
+      if (scrollY + windowHeight >= docHeight - 80) {
+        setActiveSection('waitlist')
+        return
+      }
+
+      // If at hero area above first section -> clear active section
+      const firstSection = document.getElementById(NAV_SECTIONS[0].id)
+      if (firstSection) {
+        const firstRect = firstSection.getBoundingClientRect()
+        if (firstRect.top > 220) {
+          setActiveSection('')
+          return
+        }
+      }
+
+      const targetLine = 130
+      let current = ''
+
+      for (let i = 0; i < NAV_SECTIONS.length; i++) {
+        const sec = NAV_SECTIONS[i]
+        const el = document.getElementById(sec.id)
+        if (el) {
+          const rect = el.getBoundingClientRect()
+          if (rect.top <= targetLine && rect.bottom > targetLine) {
+            current = sec.id
+            break
+          }
+        }
+      }
+
+      if (!current) {
+        let closestId = ''
+        let minDistance = Infinity
+        for (const sec of NAV_SECTIONS) {
+          const el = document.getElementById(sec.id)
+          if (el) {
+            const rect = el.getBoundingClientRect()
+            const dist = Math.abs(rect.top - targetLine)
+            if (dist < minDistance && rect.top <= windowHeight * 0.6) {
+              minDistance = dist
+              closestId = sec.id
+            }
+          }
+        }
+        if (closestId) current = closestId
+      }
+
+      if (current !== activeSection) {
+        setActiveSection(current)
+      }
+    }
+
+    function onScroll() {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          updateActiveSection()
+          ticking = false
+        })
+        ticking = true
+      }
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true })
+    updateActiveSection()
+
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [activeSection])
+
+  // Move the surfboard indicator smoothly to the active link
+  useEffect(() => {
+    function positionSurfboard() {
+      if (!activeSection) {
+        setSurfboardStyle((prev) => ({ ...prev, opacity: 0 }))
+        return
+      }
+
+      const activeEl = navLinkRefs.current[activeSection]
+      const containerEl = navContainerRef.current
+
+      if (activeEl && containerEl) {
+        const containerRect = containerEl.getBoundingClientRect()
+        const activeRect = activeEl.getBoundingClientRect()
+
+        setSurfboardStyle({
+          left: Math.round(activeRect.left - containerRect.left),
+          width: Math.round(activeRect.width),
+          opacity: 1,
+        })
+      }
+    }
+
+    positionSurfboard()
+    window.addEventListener('resize', positionSurfboard)
+    return () => window.removeEventListener('resize', positionSurfboard)
+  }, [activeSection])
+
+  function handleNavClick(e, id) {
+    if (e) e.preventDefault()
+    setMobileMenuOpen(false)
+    const el = document.getElementById(id)
+    if (el) {
+      const navHeight = 62
+      const targetY = el.getBoundingClientRect().top + window.scrollY - navHeight
+      window.scrollTo({ top: targetY, behavior: 'smooth' })
+      setActiveSection(id)
+    }
+  }
+
+  async function handleWaitlistSubmit(e) {
+    e.preventDefault()
+    if (!waitlistEmail.trim() || !waitlistName.trim() || waitlistSubmitting) return
+
+    setWaitlistSubmitting(true)
+    setWaitlistError('')
+    try {
+      const res = await fetch(`${API_BASE}/waitlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: waitlistName.trim(),
+          email: waitlistEmail.trim(),
+          platform: waitlistPlatform,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.status === 'success') {
+        track('waitlist_signup', { platform: waitlistPlatform })
+        setWaitlistResult({
+          success: true,
+          message: data.message,
+        })
+        setWaitlistName('')
+        setWaitlistEmail('')
+      } else {
+        throw new Error(data.detail || 'Could not join waitlist')
+      }
+    } catch (error) {
+      setWaitlistError(error?.message || 'We could not add you to the waitlist right now. Please try again.')
+    } finally {
+      setWaitlistSubmitting(false)
+    }
+  }
+
+  function toggleFaq(index) {
+    setActiveFaq((prev) => (prev === index ? null : index))
+  }
+
+  return (
+    <div className="landing-shell">
+      {/* Sticky Minimalist Header */}
+      <header className={`landing-navbar ${mobileMenuOpen ? 'is-menu-open' : ''}`}>
+        <div className="landing-nav-inner">
+          <a
+            href="#"
+            className="landing-brand"
+            onClick={(e) => {
+              e.preventDefault()
+              setMobileMenuOpen(false)
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
+            title="Samhaal (संभाल)"
+          >
+            <span className="landing-brand-icon"><LandingIcons.Brain /></span>
+            <span className="landing-brand-text">Samhaal</span>
+            <span className="landing-brand-sub">संभाल</span>
+          </a>
+
+          <nav className="landing-nav-links" ref={navContainerRef}>
+            {NAV_SECTIONS.map((sec) => {
+              const isActive = activeSection === sec.id
+              return (
+                <a
+                  key={sec.id}
+                  href={`#${sec.id}`}
+                  ref={(el) => (navLinkRefs.current[sec.id] = el)}
+                  className={`landing-nav-link ${isActive ? 'is-active' : ''}`}
+                  onClick={(e) => handleNavClick(e, sec.id)}
+                >
+                  {sec.label}
+                </a>
+              )
+            })}
+            <div
+              className="nav-surfboard-indicator"
