@@ -92,9 +92,9 @@ export default function PrivacyPage() {
           </p>
         </Section>
 
-        <Section title="Analytics">
+        <Section title="Website analytics">
           <p>
-            The public Samhaal landing site uses Vercel Analytics to understand aggregate website usage such as visits and traffic patterns. Analytics are used to improve the product and measure interest in the early-access waitlist.
+            The public Samhaal website uses Vercel Analytics to understand basic website usage such as visits and traffic patterns. We use this to improve the website and understand interest in Samhaal. Website analytics are not used to inspect your screenshots, extracted memories, or private app content.
           </p>
         </Section>
 
@@ -110,15 +110,17 @@ export default function PrivacyPage() {
           </p>
         </Section>
 
-        <Section title="Questions">
+        <Section title="Contact us">
           <p>
-            If you have a privacy question while evaluating Samhaal, please use the official contact or feedback channel provided with the Samhaal beta or waitlist experience.
+            If you have questions about this privacy page, your data, or Samhaal's privacy practices, email us at{' '}
+            <a href="mailto:hello.samhaal@gmail.com" style={{ color: '#111', fontWeight: 650 }}>hello.samhaal@gmail.com</a>.
           </p>
         </Section>
 
         <div style={{ marginTop: 70, paddingTop: 28, borderTop: '1px solid #e8e8e8', display: 'flex', gap: 22, flexWrap: 'wrap' }}>
           <a href="/" style={{ color: '#111', fontWeight: 650 }}>Home</a>
           <a href="/about" style={{ color: '#111', fontWeight: 650 }}>About Samhaal</a>
+          <a href="mailto:hello.samhaal@gmail.com" style={{ color: '#111', fontWeight: 650 }}>Contact</a>
         </div>
       </main>
     </div>
