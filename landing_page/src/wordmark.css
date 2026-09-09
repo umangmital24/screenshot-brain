@@ -1,0 +1,25 @@
+.landing-brand-wordmark {
+  gap: 7px;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+.landing-brand-wordmark .landing-brand-text {
+  font-weight: 750;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+  color: #111111;
+}
+
+.landing-brand-wordmark .landing-brand-sub {
+  margin-left: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0;
+  color: #777777;
+}
