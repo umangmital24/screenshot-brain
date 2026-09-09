@@ -1,16 +1,27 @@
 /* Mobile-only refinement for the scroll memory journey.
-   Keep desktop behavior untouched while making the phone demo feel intentional
-   on narrow screens. */
+   Keep desktop behavior untouched while making the phone demo larger and
+   using the sticky visual area for the active step description. */
+
+.journey-mobile-copy {
+  display: none;
+}
 
 @media (max-width: 768px) {
   .memory-journey {
+    position: relative;
     overflow: visible;
   }
 
   .memory-journey-visual {
+    position: sticky !important;
+    top: 72px !important;
     min-height: auto !important;
     height: auto !important;
-    padding: 22px 18px 34px !important;
+    padding: 14px 16px 18px !important;
+    z-index: 5;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
 
   .journey-phone-wrap {
@@ -23,8 +34,8 @@
   }
 
   .journey-phone {
-    width: min(82vw, 340px) !important;
-    max-width: 340px !important;
+    width: min(90vw, 360px) !important;
+    max-width: 360px !important;
     height: auto !important;
     aspect-ratio: 0.55;
     margin: 0 auto;
@@ -32,42 +43,89 @@
   }
 
   .journey-stage-caption {
-    margin-top: 16px !important;
+    margin-top: 10px !important;
+  }
+
+  .journey-mobile-copy {
+    display: block;
+    width: 100%;
+    max-width: 560px;
+    margin: 14px auto 0;
+    padding: 0 6px 4px;
+    text-align: left;
+  }
+
+  .journey-mobile-copy h3 {
+    margin: 0 0 8px;
+    font-size: clamp(24px, 7vw, 34px);
+    line-height: 1.08;
+    letter-spacing: -0.035em;
+    color: #09090b;
+  }
+
+  .journey-mobile-copy p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.55;
+    color: #71717a;
   }
 
   .memory-journey-copy {
     margin-top: 0 !important;
     padding-top: 0 !important;
+    position: relative;
+    z-index: 1;
+  }
+
+  .memory-journey-thread {
+    opacity: 0.18;
   }
 
   .memory-journey-step {
-    min-height: auto !important;
-    height: auto !important;
-    padding-top: 48px !important;
-    padding-bottom: 56px !important;
+    min-height: 42vh !important;
+    height: 42vh !important;
+    padding: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none;
   }
 
-  .memory-journey-step:first-child {
-    padding-top: 34px !important;
+  .memory-journey-step > * {
+    visibility: hidden;
   }
 }
 
 @media (max-width: 480px) {
   .memory-journey-visual {
-    padding: 18px 14px 28px !important;
+    top: 66px !important;
+    padding: 10px 12px 14px !important;
   }
 
   .journey-phone {
-    width: min(84vw, 320px) !important;
-    max-width: 320px !important;
+    width: min(92vw, 340px) !important;
+    max-width: 340px !important;
   }
 
   .journey-stage-caption {
-    margin-top: 14px !important;
+    margin-top: 8px !important;
+  }
+
+  .journey-mobile-copy {
+    margin-top: 10px;
+    padding: 0 8px 2px;
+  }
+
+  .journey-mobile-copy h3 {
+    font-size: clamp(22px, 7.4vw, 30px);
+    margin-bottom: 7px;
+  }
+
+  .journey-mobile-copy p {
+    font-size: 14px;
+    line-height: 1.5;
   }
 
   .memory-journey-step {
-    padding-top: 40px !important;
-    padding-bottom: 48px !important;
+    min-height: 36vh !important;
+    height: 36vh !important;
   }
 }
