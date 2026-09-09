@@ -168,7 +168,7 @@
         <div className="landing-nav-inner">
           <a
             href="#"
-            className="landing-brand"
+            className="landing-brand landing-brand-wordmark"
             onClick={(e) => {
               e.preventDefault()
               setMobileMenuOpen(false)
@@ -176,7 +176,6 @@
             }}
             title="Samhaal (संभाल)"
           >
-            <span className="landing-brand-icon"><LandingIcons.Brain /></span>
             <span className="landing-brand-text">Samhaal</span>
             <span className="landing-brand-sub">संभाल</span>
           </a>
