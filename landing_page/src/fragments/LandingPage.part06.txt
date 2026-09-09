@@ -61,13 +61,16 @@
         <div className="landing-container">
           <div className="footer-top">
             <div className="footer-brand-column">
-              <div className="landing-brand">
+              <div className="landing-brand landing-brand-wordmark">
                 <span className="landing-brand-text">Samhaal</span>
                 <span className="landing-brand-sub">संभाल</span>
               </div>
               <p className="footer-tagline">
                 Aapne snap kiya, humne samhaala. Saving millions of camera rolls from becoming a screenshot graveyard.
               </p>
+              <a href="mailto:hello.samhaal@gmail.com" className="footer-link footer-contact-link">
+                hello.samhaal@gmail.com
+              </a>
             </div>
 
             <div className="footer-links-group">
@@ -88,6 +91,7 @@
                 <a href="#trust" className="footer-link">Row-Level Security</a>
                 <a href="#trust" className="footer-link">Privacy Guarantee</a>
                 <a href="/privacy" className="footer-link">Privacy</a>
+                <a href="mailto:hello.samhaal@gmail.com" className="footer-link">Contact Us</a>
                 <a href="#trust" className="footer-link">Terms of Service</a>
               </div>
 
