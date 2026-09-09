@@ -1,0 +1,200 @@
+              style={{
+                transform: `translateX(${surfboardStyle.left}px)`,
+                width: `${surfboardStyle.width}px`,
+                opacity: surfboardStyle.opacity,
+              }}
+            />
+          </nav>
+
+          <div className="landing-nav-actions">
+            <>
+              <button className="landing-nav-ghost" onClick={(e) => handleNavClick(e, 'early-access')}>
+                Early Access
+              </button>
+              <button className="landing-cta-primary" onClick={(e) => handleNavClick(e, 'waitlist')}>
+                <span>Join Waitlist</span>
+                <LandingIcons.ArrowRight />
+              </button>
+            </>
+            <button
+              className="landing-mobile-toggle"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={mobileMenuOpen}
+            >
+              {mobileMenuOpen ? <LandingIcons.Close /> : <LandingIcons.Menu />}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile Slide-Down Navigation Menu */}
+        {mobileMenuOpen && (
+          <>
+            <div
+              className="landing-mobile-backdrop"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <div className="landing-mobile-menu">
+              <div className="mobile-menu-links">
+                {NAV_SECTIONS.map((sec) => {
+                  const isActive = activeSection === sec.id
+                  return (
+                    <a
+                      key={sec.id}
+                      href={`#${sec.id}`}
+                      className={`mobile-menu-link ${isActive ? 'is-active' : ''}`}
+                      onClick={(e) => handleNavClick(e, sec.id)}
+                    >
+                      <span>{sec.label}</span>
+                      <span className="mobile-link-arrow">→</span>
+                    </a>
+                  )
+                })}
+              </div>
+              <div className="mobile-menu-actions">
+                <button
+                  className="mobile-btn-primary"
+                  onClick={(e) => handleNavClick(e, 'waitlist')}
+                >
+                  <span>Join Early Access</span>
+                  <LandingIcons.ArrowRight />
+                </button>
+                <button
+                  className="mobile-btn-ghost"
+                  onClick={(e) => handleNavClick(e, 'early-access')}
+                >
+                  Learn about Early Access
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </header>
+
+      {/* Hero Section */}
+      <section className="landing-hero-section">
+        <div className="landing-container">
+          <div className="landing-hero-badge">
+            <span className="badge-dot" />
+            <span>Meet Samhaal (संभाल) • Aapne snap kiya, humne samhaala</span>
+          </div>
+
+          <h1 className="landing-hero-title">
+            Stop your gallery from becoming a screenshot graveyard.
+          </h1>
+
+          <p className="landing-hero-subtitle">
+            We all take screenshots thinking <em>"I'll use this later"</em> — and then they vanish into a digital cemetery of thousands of photos.
+            <strong> Samhaal</strong> rescues your captures, extracts text, prices, and links, sorts your intent, and lets you ask anything with AI.
+          </p>
+
+          <div className="landing-hero-cta-group">
+            <button className="landing-hero-btn-primary" onClick={(e) => handleNavClick(e, 'waitlist')}>
+              <span>Join the Early Access Waitlist</span>
+              <LandingIcons.ArrowRight />
+            </button>
+            <a href="#early-access" className="landing-hero-btn-secondary" onClick={(e) => handleNavClick(e, 'early-access')}>
+              <span>See Early Access Plan</span>
+            </a>
+          </div>
+
+          <div className="landing-hero-guarantees">
+            <span>✓ Early access will be free</span>
+            <span className="guarantee-sep">•</span>
+            <span>Selective share or auto-capture</span>
+            <span className="guarantee-sep">•</span>
+            <span>100% on-device privacy mode</span>
+            <span className="guarantee-sep">•</span>
+            <span>Windows beta first</span>
+          </div>
+
+          {/* Interactive Live-Look Product Preview */}
+          <div className="landing-preview-frame">
+            <div className="preview-top-bar">
+              <div className="preview-dots">
+                <span className="dot" />
+                <span className="dot" />
+                <span className="dot" />
+              </div>
+              <div className="preview-tab-controls">
+                <button
+                  className={`preview-tab-btn ${previewTab === 'product' ? 'is-active' : ''}`}
+                  onClick={() => setPreviewTab('product')}
+                >
+                  Products & Prices
+                </button>
+                <button
+                  className={`preview-tab-btn ${previewTab === 'article' ? 'is-active' : ''}`}
+                  onClick={() => setPreviewTab('article')}
+                >
+                  Articles & Reading
+                </button>
+                <button
+                  className={`preview-tab-btn ${previewTab === 'recipe' ? 'is-active' : ''}`}
+                  onClick={() => setPreviewTab('recipe')}
+                >
+                  Recipes & Cooking
+                </button>
+                <button
+                  className={`preview-tab-btn ${previewTab === 'ai' ? 'is-active' : ''}`}
+                  onClick={() => setPreviewTab('ai')}
+                >
+                  Ask Memory AI
+                </button>
+              </div>
+            </div>
+
+            <div className="preview-screen-content">
+              {previewTab === 'product' && (
+                <div className="preview-card-showcase">
+                  <div className="preview-mock-card">
+                    <div className="preview-card-header">
+                      <span className="preview-intent-badge">BUY LATER</span>
+                      <span className="preview-time-tag">Captured 2m ago</span>
+                    </div>
+                    <h3 className="preview-item-title">boAt Nirvana Ion ANC Wireless Earbuds (Charcoal Black)</h3>
+                    <p className="preview-item-summary">Active Noise Cancellation, 120 hrs total playback, Dual EQ modes, and fast Type-C charging.</p>
+                    <div className="preview-extracted-bar">
+                      <span className="preview-pill price"><LandingIcons.Tag /> <span>₹1,499 (Discounted from ₹2,990)</span></span>
+                      <span className="preview-pill link"><LandingIcons.ExternalLink /> <span>Open Amazon.in / Myntra</span></span>
+                    </div>
+                    <div className="preview-raw-ocr">
+                      OCR: "In Stock • Prime Free Delivery to Delhi NCR • 10% Instant Discount on HDFC Bank UPI"
+                    </div>
+                  </div>
+                  <div className="preview-sidebar-note">
+                    <h4>Never lose wishlist items again</h4>
+                    <p>Saw clothes on Myntra, gadgets on Amazon, or shoes on an Instagram store? Samhaal extracts the exact ₹ price, title, and direct link so you can buy it on payday instead of forgetting forever.</p>
+                  </div>
+                </div>
+              )}
+
+              {previewTab === 'article' && (
+                <div className="preview-card-showcase">
+                  <div className="preview-mock-card">
+                    <div className="preview-card-header">
+                      <span className="preview-intent-badge">READ LATER</span>
+                      <span className="preview-time-tag">Captured 1h ago</span>
+                    </div>
+                    <h3 className="preview-item-title">Finshots: Why UPI is Dominating 80% of India's Retail Payments</h3>
+                    <p className="preview-item-summary">A breakdown of NPCI's zero-MDR mandate, bank switch servers, and how QR codes conquered corner kirana stores.</p>
+                    <div className="preview-extracted-bar">
+                      <span className="preview-pill link"><LandingIcons.ExternalLink /> <span>Open finshots.in/archive</span></span>
+                      <span className="preview-pill copy"><LandingIcons.Copy /> <span>Copy 1,850 chars summary</span></span>
+                    </div>
+                    <div className="preview-raw-ocr">
+                      OCR: "Finshots Daily • 3 min read • NPCI Monthly Report • Cited in The Ken and Mint"
+                    </div>
+                  </div>
+                  <div className="preview-sidebar-note">
+                    <h4>Zero-effort reading bookmarks</h4>
+                    <p>Saved a Finshots story, a Zerodha Varsity chart, or a Twitter/X thread? Samhaal indexes every single Hindi and English word so you can search and read it anytime.</p>
+                  </div>
+                </div>
+              )}
+
+              {previewTab === 'recipe' && (
+                <div className="preview-card-showcase">
+                  <div className="preview-mock-card">
+                    <div className="preview-card-header">
+                      <span className="preview-intent-badge">COOK LATER</span>
