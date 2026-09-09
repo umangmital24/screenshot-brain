@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import './index.css'
+import './wordmark.css'
 import LandingPage from './LandingPage'
 import AboutPage from './AboutPage'
 import PrivacyPage from './PrivacyPage'
