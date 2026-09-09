@@ -1,0 +1,33 @@
+
+/* Samhaal wordmark consistency overrides */
+.landing-brand-wordmark {
+  gap: 7px;
+}
+
+.landing-brand-wordmark .landing-brand-text {
+  font-weight: 750;
+  font-size: 22px;
+  letter-spacing: -0.035em;
+  color: #111111;
+}
+
+.landing-brand-wordmark .landing-brand-sub {
+  font-size: 16px;
+  font-weight: 500;
+  color: #777777;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+  letter-spacing: 0;
+  margin-left: 0;
+}
+
+.footer-brand-column .landing-brand-wordmark .landing-brand-text {
+  color: inherit;
+}
+
+.footer-contact-link {
+  display: inline-block;
+  margin-top: 14px;
+}
