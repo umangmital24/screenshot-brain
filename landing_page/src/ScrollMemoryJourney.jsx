@@ -13,21 +13,21 @@ const STEPS = [
     number: '02',
     label: 'Understand',
     title: 'Useful context rises above the UI noise.',
-    text: 'On-device OCR reads the screen, then Samhaal uses text, layout and source context to identify what actually matters.',
+    text: 'A clear saved confirmation appears, then on-device OCR reads the screen and picks out the useful text instead of the surrounding UI.',
   },
   {
     id: 'organize',
     number: '03',
     label: 'Organize',
     title: 'A screenshot becomes a useful memory.',
-    text: 'The important entity is structured into an intent like Watch Later, Read Later, Buy Later, Visit Later or Apply Later.',
+    text: 'The important entity becomes a clean memory card with intent, title, source and useful context — ready to retrieve later.',
   },
   {
     id: 'ask',
     number: '04',
     label: 'Ask',
     title: 'Find it again like you remember it.',
-    text: 'Ask naturally instead of searching filenames: “Which thrillers did I save?” Samhaal brings the right memory back.',
+    text: 'Ask naturally instead of searching filenames: “Which thrillers did I save?” Samhaal brings the right memory back with its source.',
   },
 ]
 
@@ -58,9 +58,25 @@ function PhoneScreen({ step }) {
         <div className="journey-social-noise">♡  1,842 &nbsp;&nbsp; ◯  42 &nbsp;&nbsp; ⤴</div>
       </div>
 
-      <div className="journey-samhaal-bubble">S</div>
+      <div className="journey-bubble-label">Tap to save</div>
+      <div className="journey-samhaal-bubble">
+        <span className="journey-bubble-s">S</span>
+        <span className="journey-bubble-check">✓</span>
+      </div>
+
+      <div className="journey-save-confirm">
+        <span className="journey-confirm-mark">✓</span>
+        <div>
+          <strong>Saved to Samhaal</strong>
+          <span>Understanding this screen…</span>
+        </div>
+      </div>
 
       <div className="journey-memory-card">
+        <div className="journey-memory-success">
+          <span>✓</span>
+          <strong>Memory ready</strong>
+        </div>
         <div className="journey-memory-topline">
           <span className="journey-memory-intent">WATCH LATER</span>
           <span className="journey-memory-source">Instagram</span>
@@ -97,20 +113,45 @@ export default function ScrollMemoryJourney() {
 
   useEffect(() => {
     const nodes = Array.from(document.querySelectorAll('[data-journey-step]'))
-    if (!nodes.length || !('IntersectionObserver' in window)) return undefined
+    if (!nodes.length) return undefined
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
-        if (visible) setActiveStep(Number(visible.target.dataset.journeyStep || 0))
-      },
-      { rootMargin: '-32% 0px -42% 0px', threshold: [0.15, 0.35, 0.65] },
-    )
+    let ticking = false
 
-    nodes.forEach((node) => observer.observe(node))
-    return () => observer.disconnect()
+    const updateStep = () => {
+      const targetY = window.innerHeight * 0.5
+      let bestIndex = 0
+      let bestDistance = Infinity
+
+      nodes.forEach((node, index) => {
+        const rect = node.getBoundingClientRect()
+        const center = rect.top + rect.height / 2
+        const distance = Math.abs(center - targetY)
+        if (distance < bestDistance) {
+          bestDistance = distance
+          bestIndex = index
+        }
+      })
+
+      setActiveStep(bestIndex)
+    }
+
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      window.requestAnimationFrame(() => {
+        updateStep()
+        ticking = false
+      })
+    }
+
+    updateStep()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+    }
   }, [])
 
   return (
