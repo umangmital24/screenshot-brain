@@ -112,14 +112,26 @@ export default function ScrollMemoryJourney() {
   const [activeStep, setActiveStep] = useState(0)
 
   useEffect(() => {
-    if (window.matchMedia('(max-width: 768px)').matches) return undefined
-
+    const journey = document.querySelector('.memory-journey')
     const nodes = Array.from(document.querySelectorAll('[data-journey-step]'))
-    if (!nodes.length) return undefined
+    if (!journey) return undefined
 
     let ticking = false
 
     const updateStep = () => {
+      const isMobile = window.matchMedia('(max-width: 768px)').matches
+
+      if (isMobile) {
+        const rect = journey.getBoundingClientRect()
+        const scrollable = Math.max(rect.height - window.innerHeight, 1)
+        const travelled = Math.min(Math.max(-rect.top, 0), scrollable)
+        const progress = travelled / scrollable
+        const nextIndex = Math.min(STEPS.length - 1, Math.floor(progress * STEPS.length))
+        setActiveStep(nextIndex)
+        return
+      }
+
+      if (!nodes.length) return
       const targetY = window.innerHeight * 0.5
       let bestIndex = 0
       let bestDistance = Infinity
@@ -158,6 +170,24 @@ export default function ScrollMemoryJourney() {
 
   const currentStep = STEPS[activeStep]
 
+  const jumpToStep = (index) => {
+    setActiveStep(index)
+    if (!window.matchMedia('(max-width: 768px)').matches) return
+
+    const journey = document.querySelector('.memory-journey')
+    if (!journey) return
+
+    const rect = journey.getBoundingClientRect()
+    const absoluteTop = window.scrollY + rect.top
+    const scrollable = Math.max(journey.offsetHeight - window.innerHeight, 1)
+    const targetProgress = (index + 0.08) / STEPS.length
+
+    window.scrollTo({
+      top: absoluteTop + scrollable * targetProgress,
+      behavior: 'smooth',
+    })
+  }
+
   return (
     <div className="memory-journey" aria-label="How Samhaal turns a screenshot into a searchable memory">
       <div className="memory-journey-copy">
@@ -194,7 +224,7 @@ export default function ScrollMemoryJourney() {
                   key={step.id}
                   type="button"
                   className={`journey-mobile-tab ${activeStep === index ? 'is-active' : ''}`}
-                  onClick={() => setActiveStep(index)}
+                  onClick={() => jumpToStep(index)}
                   aria-pressed={activeStep === index}
                 >
                   {step.number}
