@@ -79,6 +79,7 @@
                 <a href="#features" className="footer-link">Features</a>
                 <a href="#early-access" className="footer-link">Early Access</a>
                 <a href="#faq" className="footer-link">FAQ</a>
+                <a href="/about" className="footer-link">About Samhaal</a>
                 <button className="footer-link-btn" onClick={(e) => handleNavClick(e, 'waitlist')}>Join Waitlist</button>
               </div>
 
@@ -87,6 +88,7 @@
                 <a href="#trust" className="footer-link">On-Device Processing</a>
                 <a href="#trust" className="footer-link">Row-Level Security</a>
                 <a href="#trust" className="footer-link">Privacy Guarantee</a>
+                <a href="/privacy" className="footer-link">Privacy</a>
                 <a href="#trust" className="footer-link">Terms of Service</a>
               </div>
 
