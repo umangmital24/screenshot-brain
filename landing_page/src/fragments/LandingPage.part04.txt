@@ -108,6 +108,8 @@
             </p>
           </div>
 
+          <ScrollMemoryJourney />
+
           <div className="platforms-workflow-grid">
             {/* Mobile Card */}
             <div className="platform-card">
