@@ -1,0 +1,200 @@
+            <span className="landing-section-tag">TRUST & PRIVACY</span>
+            <h2 className="landing-section-title">How on-device processing actually works (in plain words)</h2>
+            <p className="landing-section-subtitle">
+              No confusing marketing buzzwords. Here is how your screenshots stay completely safe and private.
+            </p>
+          </div>
+
+          <div className="trust-simple-grid">
+            <div className="trust-simple-card">
+              <div className="trust-icon-box"><LandingIcons.Cpu /></div>
+              <h3 className="trust-card-title">1. Your own device's chip reads the text</h3>
+              <p className="trust-card-desc">
+                Your phone and laptop already have powerful AI neural chips inside them. When you take a screenshot, Samhaal uses built-in on-device OCR (like Chromium Shape Detection). That means the text is read right inside your phone or laptop first — without sending your sensitive messages or bank details to an unknown server.
+              </p>
+            </div>
+
+            <div className="trust-simple-card">
+              <div className="trust-icon-box"><LandingIcons.Shield /></div>
+              <h3 className="trust-card-title">2. You decide what gets saved</h3>
+              <p className="trust-card-desc">
+                Nothing happens in the shadows. You choose whether to share single screenshots, leave them in your camera roll, or turn on the Always-On toggle. You have complete control over what enters your memory catalog.
+              </p>
+            </div>
+
+            <div className="trust-simple-card">
+              <div className="trust-icon-box"><LandingIcons.Lock /></div>
+              <h3 className="trust-card-title">3. Locked behind your personal key</h3>
+              <p className="trust-card-desc">
+                When you use cloud backup and Ask Memory AI, your screenshots are stored in private encrypted vaults protected by Row-Level Security (RLS). Only your authenticated account can ever read or search your memories. Not even other users can see your files.
+              </p>
+            </div>
+
+            <div className="trust-simple-card">
+              <div className="trust-icon-box"><LandingIcons.Zap /></div>
+              <h3 className="trust-card-title">4. Zero data selling, zero advertising</h3>
+              <p className="trust-card-desc">
+                We make money only when users upgrade to Pro. We never sell your screenshots, we never show ads, and we never train public AI models on your private photos. We treat your screenshots like your personal journal.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Grid */}
+      <section id="features" className="landing-section landing-section-alt">
+        <div className="landing-container">
+          <div className="landing-section-header">
+            <span className="landing-section-tag">POWERFUL FEATURES</span>
+            <h2 className="landing-section-title">Everything you need to turn chaos into recall</h2>
+            <p className="landing-section-subtitle">
+              Built for speed, dense information display, and zero clutter.
+            </p>
+          </div>
+
+          <div className="features-grid">
+            <div className="feature-card">
+              <div className="feature-icon"><LandingIcons.Tag /></div>
+              <h3 className="feature-title">8 Automated Intent Buckets</h3>
+              <p className="feature-description">
+                Auto-sorts into Reading, Products, Media, Recipes, Travel, Knowledge, Career, and Tools without manual tagging.
+              </p>
+            </div>
+
+            <div className="feature-card">
+              <div className="feature-icon"><LandingIcons.ExternalLink /></div>
+              <h3 className="feature-title">Actionable Entity Extraction</h3>
+              <p className="feature-description">
+                1-tap to open extracted URLs in new tabs, call phone numbers, or copy prices and discount tags directly.
+              </p>
+            </div>
+
+            <div className="feature-card">
+              <div className="feature-icon"><LandingIcons.Sparkles /></div>
+              <h3 className="feature-title">Ask Memory AI Copilot</h3>
+              <p className="feature-description">
+                Natural-language Q&A across your screenshot archive. Ask questions and get cited answers with image previews.
+              </p>
+            </div>
+
+            <div className="feature-card">
+              <div className="feature-icon"><LandingIcons.Shield /></div>
+              <h3 className="feature-title">On-Device Privacy Mode</h3>
+              <p className="feature-description">
+                Runs local Shape Detection OCR directly in your browser or on-device processor to keep personal data local.
+              </p>
+            </div>
+
+            <div className="feature-card">
+              <div className="feature-icon"><LandingIcons.Zap /></div>
+              <h3 className="feature-title">Fast, Distraction-Free Design</h3>
+              <p className="feature-description">
+                Clean white & black interface, instant keyboard shortcuts, and zero bloat so you find what you need in seconds.
+              </p>
+            </div>
+
+            <div className="feature-card">
+              <div className="feature-icon"><LandingIcons.Brain /></div>
+              <h3 className="feature-title">Fuzzy Deduplication & Frequency</h3>
+              <p className="feature-description">
+                Took screenshots of the same item twice? Samhaal groups duplicates and tracks frequency counters (e.g. 3x).
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Early Access Section */}
+      <section id="early-access" className="landing-section">
+        <div className="landing-container">
+          <div className="landing-section-header">
+            <span className="landing-section-tag">EARLY ACCESS</span>
+            <h2 className="landing-section-title">Help shape Samhaal before the public launch</h2>
+            <p className="landing-section-subtitle">
+              We are opening Samhaal to a small group first so we can learn how people actually save, search, and revisit screenshots. Windows beta comes first, Android follows next.
+            </p>
+          </div>
+          <div className="landing-pricing-grid">
+            <div className="landing-pricing-card">
+              <div className="pricing-card-top">
+                <span className="pricing-plan-name">Windows Beta</span>
+                <p className="pricing-plan-desc">The first hands-on Samhaal client for early users.</p>
+              </div>
+              <ul className="pricing-feature-list">
+                <li><LandingIcons.Check /> On-device Windows OCR</li>
+                <li><LandingIcons.Check /> Raw screenshot privacy-first flow</li>
+                <li><LandingIcons.Check /> Searchable organized memories</li>
+                <li><LandingIcons.Check /> Early-user feedback loop</li>
+              </ul>
+              <button className="pricing-btn" onClick={(e) => handleNavClick(e, 'waitlist')}>Join Windows Waitlist</button>
+            </div>
+            <div className="landing-pricing-card is-recommended">
+              <div className="pricing-card-top">
+                <span className="pricing-plan-name">Android Next</span>
+                <p className="pricing-plan-desc">Planned after the Windows beta using Google ML Kit for on-device OCR.</p>
+              </div>
+              <ul className="pricing-feature-list">
+                <li><LandingIcons.Check /> Google ML Kit OCR on device</li>
+                <li><LandingIcons.Check /> Minimal extracted data sent for AI organization</li>
+                <li><LandingIcons.Check /> Designed around real screenshot habits</li>
+                <li><LandingIcons.Check /> Early access based on waitlist demand</li>
+              </ul>
+              <button className="pricing-btn is-primary" onClick={(e) => handleNavClick(e, 'waitlist')}>Join Early Access</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ Section */}
+      <section id="faq" className="landing-section landing-section-alt">
+        <div className="landing-container">
+          <div className="landing-section-header">
+            <span className="landing-section-tag">FREQUENTLY ASKED QUESTIONS</span>
+            <h2 className="landing-section-title">Everything you need to know about Samhaal</h2>
+            <p className="landing-section-subtitle">
+              Clear, transparent answers to common questions about privacy, capture modes, and plans.
+            </p>
+          </div>
+
+          <div className="faq-accordion-list">
+            {FAQ_DATA.map((item, idx) => {
+              const isOpen = activeFaq === idx
+              return (
+                <div key={idx} className={`faq-item ${isOpen ? 'is-open' : ''}`}>
+                  <button className="faq-question-btn" onClick={() => toggleFaq(idx)}>
+                    <span className="faq-question-text">{item.q}</span>
+                    <span className={`faq-chevron ${isOpen ? 'is-open' : ''}`}>
+                      <LandingIcons.ChevronDown />
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="faq-answer-body">
+                      <p>{item.a}</p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Early Access Waitlist Section */}
+      <section id="waitlist" className="landing-section">
+        <div className="landing-container">
+          <div className="waitlist-box">
+            <div className="waitlist-header">
+              <span className="landing-section-tag">EARLY ACCESS</span>
+              <h2 className="waitlist-title">Join the Samhaal early access waitlist</h2>
+              <p className="waitlist-subtitle">
+                Reserve your spot to unlock upcoming desktop hotkeys (macOS/Windows) and browser extensions, and save your gallery from becoming a screenshot graveyard.
+              </p>
+            </div>
+
+            {waitlistResult ? (
+              <div className="waitlist-success-card">
+                <span className="success-icon"><LandingIcons.Check /></span>
+                <h3 className="success-title">You're on the early access waitlist!</h3>
+                <p className="success-text">
+                  {waitlistResult.message || "We've reserved your priority spot. You'll receive early invite instructions directly in your inbox."}
+                </p>
