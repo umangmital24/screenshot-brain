@@ -4,7 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "reconstruct": "node scripts/reconstruct.mjs",
+    "predev": "npm run reconstruct",
     "dev": "vite",
+    "prebuild": "npm run reconstruct",
     "build": "vite build",
     "preview": "vite preview"
   },
