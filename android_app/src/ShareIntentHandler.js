@@ -6,14 +6,12 @@ import { uploadScreenshot } from './api'
 import { colors } from './theme'
 
 /**
- * Mount once near the app root (inside NavigationContainer is fine, or above it).
- * Watches for an incoming Android share (screenshot shared into the app) and
- * processes it automatically through the privacy-first /screenshot/metadata pipeline —
- * no navigation, no manual picker step.
+ * Handles screenshots shared into Samhaal. OCR runs locally and the extracted
+ * text is queued through the same async /captures pipeline as Save Bubble.
  */
 export default function ShareIntentHandler() {
-  const { hasShareIntent, shareIntent, resetShareIntent, error } = useShareIntentContext()
-  const [status, setStatus] = useState(null) // null | 'processing' | 'done' | 'error'
+  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntentContext()
+  const [status, setStatus] = useState(null)
   const [message, setMessage] = useState('')
   const processingRef = useRef(false)
 
@@ -32,9 +30,6 @@ export default function ShareIntentHandler() {
       const file = shareIntent?.files?.[0]
       if (!file?.path) throw new Error('No image found in share')
 
-      // Make sure we have a live session before uploading. If the user's
-      // session expired, bail out quietly rather than throwing a confusing
-      // network error — they'll see it queued next time they open the app.
       const { data } = await supabase.auth.getSession()
       if (!data.session) {
         setStatus('error')
@@ -42,19 +37,23 @@ export default function ShareIntentHandler() {
         return
       }
 
-      const result = await uploadScreenshot({ uri: file.path })
+      const result = await uploadScreenshot({ uri: file.path, appSource: 'android_share_sheet' })
       setStatus('done')
-      setMessage(
-        `Saved under "${result.intent || 'Uncategorized'}" — ${result.memories?.length ?? 0} item(s)`
-      )
+
+      if (result.status === 'completed') {
+        const count = result.memories?.length ?? 0
+        const first = result.memories?.[0]
+        setMessage(first?.intent ? `Saved to ${first.intent.replaceAll('_', ' ')} · ${count} item(s)` : `Saved · ${count} item(s)`)
+      } else {
+        setMessage('Saved. Samhaal is finishing this memory in the background.')
+      }
     } catch (err) {
       setStatus('error')
       setMessage(err.message || 'Could not save that screenshot')
     } finally {
       processingRef.current = false
       resetShareIntent()
-      // Auto-dismiss the toast after a moment
-      setTimeout(() => setStatus(null), 2500)
+      setTimeout(() => setStatus(null), 3000)
     }
   }
 
@@ -63,9 +62,7 @@ export default function ShareIntentHandler() {
   return (
     <View style={styles.toast} pointerEvents="none">
       {status === 'processing' && <ActivityIndicator size="small" color={colors.brass} />}
-      <Text style={styles.text} numberOfLines={2}>
-        {status === 'processing' ? message : message}
-      </Text>
+      <Text style={styles.text} numberOfLines={2}>{message}</Text>
     </View>
   )
 }
