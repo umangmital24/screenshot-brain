@@ -50,6 +50,8 @@ export default async function uploadScreenshotTask(data) {
     return
   }
 
+  let queuedCaptureId = null
+
   try {
     if (extractedText) {
       const queued = await createCapture(extractedText, sourceApp, {
@@ -57,8 +59,9 @@ export default async function uploadScreenshotTask(data) {
         capturedAt,
         ocrBlocks,
       })
+      queuedCaptureId = queued.capture_id
 
-      const result = await waitForCapture(queued.capture_id, { timeoutMs: 42000, pollMs: 1500 })
+      const result = await waitForCapture(queuedCaptureId, { timeoutMs: 42000, pollMs: 1500 })
       if (result.status !== 'completed') {
         await enqueuePendingCapture({
           extractedText,
@@ -67,7 +70,7 @@ export default async function uploadScreenshotTask(data) {
           screenshotUri,
           sourceApp,
           ocrBlocks,
-          captureId: queued.capture_id,
+          captureId: queuedCaptureId,
           lastStatus: result.status,
         })
         reportBubbleResult(true, 'Saved. Samhaal is finishing this memory in the background.')
@@ -97,7 +100,7 @@ export default async function uploadScreenshotTask(data) {
         screenshotUri,
         sourceApp,
         ocrBlocks,
-        captureId: err?.data?.capture_id || null,
+        captureId: queuedCaptureId,
         lastError: err?.message || 'Sync failed',
       })
       reportBubbleResult(true, 'Saved locally. Samhaal will retry sync automatically.')
