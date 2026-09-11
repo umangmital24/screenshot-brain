@@ -1,12 +1,12 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from app.services.auth import get_current_user_id
 from app.services.db import get_client
-from app.services.entitlements import enforce_monthly_limit, get_user_entitlements
+from app.services.entitlements import enforce_monthly_limit
 
 router = APIRouter(prefix="/captures", tags=["captures"])
 
@@ -141,6 +141,12 @@ def get_capture(capture_id: str, user_id: str = Depends(get_current_user_id)):
 
 @router.post("/{capture_id}/retry")
 def retry_capture(capture_id: str, user_id: str = Depends(get_current_user_id)):
+    """Manually requeue a retryable capture.
+
+    Active processing jobs are never reset here: doing so could allow two workers
+    to process the same capture concurrently. Expired worker leases are recovered
+    automatically by the claim RPC.
+    """
     try:
         capture_uuid = str(uuid.UUID(capture_id))
     except ValueError:
@@ -149,7 +155,7 @@ def retry_capture(capture_id: str, user_id: str = Depends(get_current_user_id)):
     client = get_client()
     capture_result = (
         client.table("capture_events")
-        .select("id,status")
+        .select("id,status,next_retry_at")
         .eq("id", capture_uuid)
         .eq("user_id", user_id)
         .limit(1)
@@ -159,28 +165,37 @@ def retry_capture(capture_id: str, user_id: str = Depends(get_current_user_id)):
         raise HTTPException(status_code=404, detail="Capture not found")
 
     capture = capture_result.data[0]
-    if capture["status"] == "completed":
-        return {"capture_id": capture_uuid, "status": "completed"}
-    if capture["status"] == "failed_permanent":
-        raise HTTPException(status_code=409, detail="This capture cannot be retried.")
+    status = capture["status"]
 
+    if status == "completed":
+        return {"capture_id": capture_uuid, "status": "completed"}
+    if status == "processing":
+        raise HTTPException(
+            status_code=409,
+            detail="Capture is currently processing. Its worker lease will recover automatically if the worker stops.",
+        )
+    if status == "failed_permanent":
+        raise HTTPException(status_code=409, detail="This capture cannot be retried.")
+    if status == "queued":
+        return {"capture_id": capture_uuid, "status": "queued"}
+
+    # Only failed_retryable reaches this point.
+    now_iso = datetime.now(timezone.utc).isoformat()
     client.table("capture_events").update({
         "status": "queued",
         "next_retry_at": None,
         "last_error": None,
+        "updated_at": now_iso,
     }).eq("id", capture_uuid).eq("user_id", user_id).execute()
 
     client.table("capture_jobs").update({
         "status": "queued",
-        "run_after": datetime.utcnow().isoformat(),
+        "run_after": now_iso,
         "locked_at": None,
         "locked_by": None,
+        "lease_expires_at": None,
         "last_error": None,
+        "updated_at": now_iso,
     }).eq("capture_id", capture_uuid).execute()
 
     return {"capture_id": capture_uuid, "status": "queued"}
-
-
-@router.get("/account/entitlements")
-def account_entitlements(user_id: str = Depends(get_current_user_id)):
-    return get_user_entitlements(user_id)
