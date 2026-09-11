@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.services.db import get_client, get_signed_screenshot_url
 from app.services.auth import get_current_user_id
+from app.services.entitlements import enforce_monthly_limit
 from app.models.schema import ChatRequest, ChatResponse, ChatSource
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,12 @@ def _get_client() -> genai.Client:
 
 @router.post("", response_model=ChatResponse)
 async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
+    enforce_monthly_limit(
+        user_id=user_id,
+        entitlement_key="ask_queries_per_month",
+        usage_event_type="ask_query",
+    )
+
     client = get_client()
 
     def _fetch_memories():
@@ -121,6 +128,23 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
                 extracted_text=m.get("extracted_text"),
                 image_url=signed_url,
             ))
+
+    # Record billable/quotable usage only after a successful AI response.
+    # client_request_id makes mobile/network retries idempotent when supplied.
+    try:
+        usage_key = f"ask:{req.client_request_id}" if req.client_request_id else None
+        client.table("usage_events").insert({
+            "user_id": user_id,
+            "event_type": "ask_query",
+            "quantity": 1,
+            "idempotency_key": usage_key,
+            "reference_type": "chat",
+            "metadata": {"model": os.environ.get("GEMINI_CHAT_MODEL", "gemini-2.5-flash")},
+        }).execute()
+    except Exception:
+        # Duplicate idempotency keys are expected on retries. Usage accounting must
+        # never turn a successful answer into an API failure.
+        logger.info("Ask usage event was not inserted (likely replay)", exc_info=True)
 
     return ChatResponse(
         answer=answer or "I couldn't find an answer in your saved memories.",
