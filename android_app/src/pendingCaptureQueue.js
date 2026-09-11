@@ -1,10 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { DeviceEventEmitter } from 'react-native'
-import { saveExtractedText } from './api'
+import { createCapture, getCapture, waitForCapture } from './api'
 import { saveLocalScreenshotReferences } from './localMemoryMedia'
 import { supabase } from './supabaseClient'
 
-const KEY = 'samhaalPendingCaptureQueueV1'
+const KEY = 'samhaalPendingCaptureQueueV2'
 const MAX_PENDING = 50
 let flushing = false
 
@@ -25,7 +25,7 @@ async function writeQueue(items) {
 export function isRetryableCaptureError(error) {
   const status = Number(error?.status || 0)
   if (!status) return true
-  return status === 401 || status === 408 || status === 429 || status >= 500
+  return status === 401 || status === 408 || status === 409 || status === 429 || status >= 500
 }
 
 export async function enqueuePendingCapture(capture) {
@@ -44,6 +44,34 @@ export async function enqueuePendingCapture(capture) {
   await writeQueue(queue)
 }
 
+async function syncItem(item) {
+  let captureId = item.captureId || null
+
+  if (!captureId) {
+    const queued = await createCapture(
+      item.extractedText,
+      item.sourceApp || 'android_save_bubble',
+      {
+        clientEventId: item.clientEventId,
+        capturedAt: item.capturedAt,
+        ocrBlocks: item.ocrBlocks || [],
+      },
+    )
+    captureId = queued.capture_id
+  } else {
+    const current = await getCapture(captureId)
+    if (current.status === 'completed') return { done: true, result: current, captureId }
+    if (current.status === 'failed_permanent') {
+      const error = new Error(current.last_error || 'Capture failed permanently')
+      error.status = 422
+      throw error
+    }
+  }
+
+  const result = await waitForCapture(captureId, { timeoutMs: 12000, pollMs: 1500 })
+  return { done: result.status === 'completed', result, captureId }
+}
+
 export async function flushPendingCaptures() {
   if (flushing) return { synced: 0, pending: (await readQueue()).length }
   flushing = true
@@ -60,28 +88,27 @@ export async function flushPendingCaptures() {
 
     for (const item of queue) {
       try {
-        const result = await saveExtractedText(
-          item.extractedText,
-          item.sourceApp || 'android_save_bubble',
-          {
-            clientEventId: item.clientEventId,
-            capturedAt: item.capturedAt,
-            ocrBlocks: item.ocrBlocks || [],
-          },
-        )
-
-        if (result.processing_status !== 'ready') {
-          remaining.push({ ...item, attempts: (item.attempts || 0) + 1 })
+        const { done, result, captureId } = await syncItem(item)
+        if (!done) {
+          remaining.push({
+            ...item,
+            captureId,
+            attempts: (item.attempts || 0) + 1,
+            lastStatus: result?.status || 'queued',
+          })
           continue
         }
 
         await saveLocalScreenshotReferences(
           result.memories || [],
           item.screenshotUri,
-          result.screenshot_id,
+          null,
         )
         synced += 1
       } catch (error) {
+        if (Number(error?.status || 0) === 422) {
+          continue
+        }
         remaining.push({
           ...item,
           attempts: (item.attempts || 0) + 1,
