@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
+import uuid
 
 VALID_INTENTS = {
     "READ_LATER", "WATCH_LATER", "BUY_LATER", "COOK_LATER",
@@ -57,11 +58,22 @@ class MemoryUpdate(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=1000)
+    client_request_id: Optional[str] = Field(None, max_length=64)
 
     @field_validator("question")
     @classmethod
     def clean_question(cls, value):
         return value.strip()
+
+    @field_validator("client_request_id")
+    @classmethod
+    def validate_client_request_id(cls, value):
+        if value is None:
+            return value
+        try:
+            return str(uuid.UUID(value.strip()))
+        except (ValueError, AttributeError):
+            raise ValueError("client_request_id must be a valid UUID")
 
 
 class ChatSource(BaseModel):
