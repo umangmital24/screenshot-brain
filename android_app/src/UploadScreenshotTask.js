@@ -14,6 +14,14 @@ function reportBubbleResult(success, message = null) {
   }
 }
 
+function reportBubblePending(message = null) {
+  try {
+    SaveBubble?.reportSavePending?.(message)
+  } catch {
+    // No native bubble is present in legacy/manual flows.
+  }
+}
+
 function parseBlocks(raw) {
   if (!raw) return []
   try {
@@ -43,7 +51,7 @@ export default async function uploadScreenshotTask(data) {
   if (!sessionData.session) {
     if (extractedText && clientEventId) {
       await enqueuePendingCapture({ extractedText, clientEventId, capturedAt, screenshotUri, sourceApp, ocrBlocks })
-      reportBubbleResult(true, 'Saved locally. Open Samhaal after signing in to sync.')
+      reportBubblePending('Saved locally. Open Samhaal after signing in to sync.')
     } else {
       reportBubbleResult(false, 'Open Samhaal and sign in first.')
     }
@@ -73,7 +81,7 @@ export default async function uploadScreenshotTask(data) {
           captureId: queuedCaptureId,
           lastStatus: result.status,
         })
-        reportBubbleResult(true, 'Saved. Samhaal is finishing this memory in the background.')
+        reportBubblePending('Saved. Samhaal is finishing this memory in the background.')
         return
       }
 
@@ -86,7 +94,7 @@ export default async function uploadScreenshotTask(data) {
     const uri = filePath.includes('://') ? filePath : `file://${filePath}`
     const result = await uploadScreenshot({ uri, appSource: 'android_legacy_overlay' })
     if (result.status !== 'completed') {
-      reportBubbleResult(true, 'Saved. Samhaal is finishing this memory in the background.')
+      reportBubblePending('Saved. Samhaal is finishing this memory in the background.')
       return
     }
     reportBubbleResult(true)
@@ -103,7 +111,7 @@ export default async function uploadScreenshotTask(data) {
         captureId: queuedCaptureId,
         lastError: err?.message || 'Sync failed',
       })
-      reportBubbleResult(true, 'Saved locally. Samhaal will retry sync automatically.')
+      reportBubblePending('Saved locally. Samhaal will retry sync automatically.')
       return
     }
 
