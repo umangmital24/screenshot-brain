@@ -54,6 +54,11 @@ class SaveBubbleModule(private val reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
+  fun reportSavePending(message: String?) {
+    SaveBubbleAccessibilityService.current?.reportSavePending(message)
+  }
+
+  @ReactMethod
   fun openAccessibilitySettings() {
     val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
       flags = Intent.FLAG_ACTIVITY_NEW_TASK
