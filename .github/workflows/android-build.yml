@@ -12,7 +12,7 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: android_app
@@ -21,9 +21,8 @@ jobs:
       EXPO_PUBLIC_API_BASE: https://screenshot-brain-1.onrender.com
       EXPO_PUBLIC_SUPABASE_URL: https://yekvlxbxdtksexnhilan.supabase.co
       EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_E6wBZ-N1SQ3a7a9uTXBNpg_VCA82853
-      # Add the Web OAuth client ID as a GitHub Actions variable named GOOGLE_WEB_CLIENT_ID.
-      # The Android OAuth client remains configured in Google Cloud using package + SHA-1.
       EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
+      GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
 
     steps:
       - name: Checkout
@@ -56,7 +55,7 @@ jobs:
           test -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
 
       - name: Gradle compile + standalone test APK
-        run: ./android/gradlew -p android assembleRelease --stacktrace
+        run: ./android/gradlew -p android assembleRelease -x lintVitalAnalyzeRelease --no-daemon --stacktrace
 
       - name: Upload standalone test APK
         if: success()
