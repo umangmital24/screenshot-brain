@@ -5,17 +5,30 @@ import { saveLocalScreenshotReferences } from './localMemoryMedia'
 import { supabase } from './supabaseClient'
 
 const KEY = 'samhaalPendingCaptureQueueV2'
+const LEGACY_KEY = 'samhaalPendingCaptureQueueV1'
 const MAX_PENDING = 50
 let flushing = false
 
-async function readQueue() {
+async function readStored(key) {
   try {
-    const raw = await AsyncStorage.getItem(KEY)
+    const raw = await AsyncStorage.getItem(key)
     const parsed = raw ? JSON.parse(raw) : []
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
   }
+}
+
+async function readQueue() {
+  const current = await readStored(KEY)
+  if (current.length) return current
+
+  const legacy = await readStored(LEGACY_KEY)
+  if (!legacy.length) return []
+
+  await writeQueue(legacy)
+  await AsyncStorage.removeItem(LEGACY_KEY).catch(() => {})
+  return legacy
 }
 
 async function writeQueue(items) {
@@ -99,16 +112,10 @@ export async function flushPendingCaptures() {
           continue
         }
 
-        await saveLocalScreenshotReferences(
-          result.memories || [],
-          item.screenshotUri,
-          null,
-        )
+        await saveLocalScreenshotReferences(result.memories || [], item.screenshotUri, null)
         synced += 1
       } catch (error) {
-        if (Number(error?.status || 0) === 422) {
-          continue
-        }
+        if (Number(error?.status || 0) === 422) continue
         remaining.push({
           ...item,
           attempts: (item.attempts || 0) + 1,
