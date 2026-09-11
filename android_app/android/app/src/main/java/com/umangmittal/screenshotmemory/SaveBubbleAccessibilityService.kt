@@ -429,6 +429,17 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     }
   }
 
+  fun reportSavePending(message: String? = null) {
+    if (!busy) return
+    bubble?.visibility = View.VISIBLE
+    setBubbleState("…")
+    if (!message.isNullOrBlank()) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    mainHandler.postDelayed({
+      setBubbleState("✦")
+      busy = false
+    }, 1000)
+  }
+
   private fun finishWithSuccess() {
     bubble?.visibility = View.VISIBLE
     setBubbleState("✓")
