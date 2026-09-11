@@ -1,5 +1,5 @@
 import { NativeModules, DeviceEventEmitter } from 'react-native'
-import { saveExtractedText, uploadScreenshot } from './api'
+import { createCapture, waitForCapture, uploadScreenshot } from './api'
 import { saveLocalScreenshotReferences } from './localMemoryMedia'
 import { enqueuePendingCapture, isRetryableCaptureError } from './pendingCaptureQueue'
 import { supabase } from './supabaseClient'
@@ -26,9 +26,8 @@ function parseBlocks(raw) {
 
 /**
  * Headless bridge used by the Android Save Bubble.
- * The screenshot itself lives in Android MediaStore/Gallery. Samhaal stores only
- * that local content URI as a memory reference. OCR text, source-app context,
- * lightweight OCR geometry and capture metadata are sent to the backend.
+ * Raw screenshot pixels stay on-device. Only OCR text, OCR geometry, source-app
+ * context and capture metadata are sent to the Samhaal capture pipeline.
  */
 export default async function uploadScreenshotTask(data) {
   const extractedText = data?.extractedText
@@ -53,26 +52,40 @@ export default async function uploadScreenshotTask(data) {
 
   try {
     if (extractedText) {
-      const result = await saveExtractedText(extractedText, sourceApp, {
+      const queued = await createCapture(extractedText, sourceApp, {
         clientEventId,
         capturedAt,
         ocrBlocks,
       })
 
-      if (result.processing_status !== 'ready') {
-        await enqueuePendingCapture({ extractedText, clientEventId, capturedAt, screenshotUri, sourceApp, ocrBlocks })
-        reportBubbleResult(true, 'Saved. Samhaal is still syncing this memory.')
+      const result = await waitForCapture(queued.capture_id, { timeoutMs: 42000, pollMs: 1500 })
+      if (result.status !== 'completed') {
+        await enqueuePendingCapture({
+          extractedText,
+          clientEventId,
+          capturedAt,
+          screenshotUri,
+          sourceApp,
+          ocrBlocks,
+          captureId: queued.capture_id,
+          lastStatus: result.status,
+        })
+        reportBubbleResult(true, 'Saved. Samhaal is finishing this memory in the background.')
         return
       }
 
-      await saveLocalScreenshotReferences(result.memories || [], screenshotUri, result.screenshot_id)
+      await saveLocalScreenshotReferences(result.memories || [], screenshotUri, null)
       reportBubbleResult(true)
       DeviceEventEmitter.emit('memoriesUpdated')
       return
     }
 
     const uri = filePath.includes('://') ? filePath : `file://${filePath}`
-    await uploadScreenshot({ uri, appSource: 'android_legacy_overlay' })
+    const result = await uploadScreenshot({ uri, appSource: 'android_legacy_overlay' })
+    if (result.status !== 'completed') {
+      reportBubbleResult(true, 'Saved. Samhaal is finishing this memory in the background.')
+      return
+    }
     reportBubbleResult(true)
     DeviceEventEmitter.emit('memoriesUpdated')
   } catch (err) {
@@ -84,6 +97,7 @@ export default async function uploadScreenshotTask(data) {
         screenshotUri,
         sourceApp,
         ocrBlocks,
+        captureId: err?.data?.capture_id || null,
         lastError: err?.message || 'Sync failed',
       })
       reportBubbleResult(true, 'Saved locally. Samhaal will retry sync automatically.')
