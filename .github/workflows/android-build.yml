@@ -1,0 +1,52 @@
+name: Android Build Check
+
+on:
+  push:
+    branches:
+      - feature/android-app
+    paths:
+      - 'android_app/**'
+      - '.github/workflows/android-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android_app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: android_app/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Expo config sanity check
+        run: npx expo config --type public >/tmp/expo-config.json
+
+      - name: Gradle compile + debug APK
+        run: ./android/gradlew -p android assembleDebug --stacktrace
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: samhaal-debug-apk
+          path: android_app/android/app/build/outputs/apk/debug/app-debug.apk
