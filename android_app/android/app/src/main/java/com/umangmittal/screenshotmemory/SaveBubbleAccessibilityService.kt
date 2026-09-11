@@ -264,6 +264,8 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
 
     busy = true
     setBubbleState("…")
+
+    // Hide only while Android captures the screen so the bubble itself is not saved.
     bubble?.visibility = View.INVISIBLE
 
     val sourceApp = sourceAppLabel(foregroundPackage)
@@ -271,6 +273,11 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     mainHandler.postDelayed({
       takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
         override fun onSuccess(screenshot: ScreenshotResult) {
+          // The screenshot has already been captured, so restore the bubble immediately.
+          // OCR/network work can continue in the background without making the bubble vanish.
+          bubble?.visibility = View.VISIBLE
+          setBubbleState("…")
+
           val buffer = screenshot.hardwareBuffer
           val hardwareBitmap = try { Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace) } catch (_: Exception) { null }
           val bitmap = hardwareBitmap?.copy(Bitmap.Config.ARGB_8888, false)
@@ -293,6 +300,7 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
         }
 
         override fun onFailure(errorCode: Int) {
+          bubble?.visibility = View.VISIBLE
           finishWithError("This screen could not be captured.")
         }
       })
