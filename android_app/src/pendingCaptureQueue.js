@@ -57,28 +57,36 @@ export async function enqueuePendingCapture(capture) {
   await writeQueue(queue)
 }
 
-async function syncItem(item) {
-  let captureId = item.captureId || null
-
-  if (!captureId) {
-    const queued = await createCapture(
-      item.extractedText,
-      item.sourceApp || 'android_save_bubble',
-      {
-        clientEventId: item.clientEventId,
-        capturedAt: item.capturedAt,
-        ocrBlocks: item.ocrBlocks || [],
-      },
-    )
-    captureId = queued.capture_id
-  } else {
-    const current = await getCapture(captureId)
-    if (current.status === 'completed') return { done: true, result: current, captureId }
-    if (current.status === 'failed_permanent') {
-      const error = new Error(current.last_error || 'Capture failed permanently')
-      error.status = 422
-      throw error
+async function ensureCapture(item) {
+  if (item.captureId) {
+    try {
+      const current = await getCapture(item.captureId)
+      return { captureId: item.captureId, current }
+    } catch (error) {
+      if (Number(error?.status || 0) !== 404) throw error
     }
+  }
+
+  const queued = await createCapture(
+    item.extractedText,
+    item.sourceApp || 'android_save_bubble',
+    {
+      clientEventId: item.clientEventId,
+      capturedAt: item.capturedAt,
+      ocrBlocks: item.ocrBlocks || [],
+    },
+  )
+  return { captureId: queued.capture_id, current: null }
+}
+
+async function syncItem(item) {
+  const { captureId, current } = await ensureCapture(item)
+
+  if (current?.status === 'completed') return { done: true, result: current, captureId }
+  if (current?.status === 'failed_permanent') {
+    const error = new Error(current.last_error || 'Capture failed permanently')
+    error.status = 422
+    throw error
   }
 
   const result = await waitForCapture(captureId, { timeoutMs: 12000, pollMs: 1500 })
