@@ -9,7 +9,7 @@ load_dotenv()
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper())
 logger = logging.getLogger(__name__)
 
-from app.routers import upload, memories, chat, waitlist, captures
+from app.routers import upload, memories, chat, waitlist, captures, account
 from app.middleware.rate_limiter import InMemoryRateLimiterMiddleware
 
 app = FastAPI(
@@ -32,6 +32,7 @@ app.add_middleware(
 app.add_middleware(InMemoryRateLimiterMiddleware, max_requests=60, window_seconds=60)
 
 app.include_router(captures.router)
+app.include_router(account.router)
 app.include_router(upload.router)
 app.include_router(memories.router)
 app.include_router(chat.router)
