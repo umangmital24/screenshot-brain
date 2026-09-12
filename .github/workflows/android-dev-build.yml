@@ -49,6 +49,8 @@ jobs:
           test -n "$EXPO_PUBLIC_API_BASE"
           test -n "$EXPO_PUBLIC_SUPABASE_URL"
           test -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
+          test -n "$EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID" || (echo "Missing repository variable GOOGLE_WEB_CLIENT_ID" && exit 1)
+          echo "$EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID" | grep -Eq '^[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$' || (echo "GOOGLE_WEB_CLIENT_ID must be a Web OAuth client ID" && exit 1)
 
       - name: Build development APK
         run: ./android/gradlew -p android assembleDebug --no-daemon --stacktrace
