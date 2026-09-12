@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient'
 import { recognizeScreenshotText } from './onDeviceOcr'
 
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE || 'https://screenshot-brain-1.onrender.com'
 const DEFAULT_POLL_MS = 1500
 const DEFAULT_WAIT_MS = 45000
 
