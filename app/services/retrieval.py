@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import re
 from datetime import datetime, timezone
@@ -9,6 +10,7 @@ from typing import Any
 from app.services.db import get_client
 from app.services.query_parser import ParsedAskQuery
 
+logger = logging.getLogger(__name__)
 CANDIDATE_LIMIT = 250
 DEFAULT_TOP_K = 8
 
@@ -58,7 +60,6 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
     summary = _text(memory.get("summary"))
     details = _text(memory.get("extracted_text"))
     visual = _visual_text(memory.get("visual_context"))
-
     searchable = f"{name} {category} {summary} {details}"
     score = 0.0
 
@@ -79,16 +80,10 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
 
     if parsed.colors:
         matched_colors = sum(1 for color in parsed.colors if color in visual or color in searchable)
-        if matched_colors:
-            score += 0.18 * (matched_colors / len(parsed.colors))
-        else:
-            score -= 0.12
+        score += 0.18 * (matched_colors / len(parsed.colors)) if matched_colors else -0.12
 
     if parsed.intent:
-        if _text(memory.get("intent")) == parsed.intent.lower():
-            score += 0.09
-        else:
-            score -= 0.02
+        score += 0.09 if _text(memory.get("intent")) == parsed.intent.lower() else -0.02
 
     score += 0.035 * _recency_score(memory.get("last_seen"))
     frequency = max(int(memory.get("frequency") or 1), 1)
@@ -96,23 +91,37 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
     return score
 
 
-def retrieve_memories(user_id: str, parsed: ParsedAskQuery, top_k: int = DEFAULT_TOP_K) -> list[dict]:
-    client = get_client()
-    query = (
+def _fetch_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict]:
+    search_query = " ".join((*parsed.terms, *parsed.colors)).strip()
+    if search_query:
+        try:
+            result = client.rpc(
+                "search_memories_fts",
+                {"p_user_id": user_id, "p_query": search_query, "p_limit": CANDIDATE_LIMIT},
+            ).execute()
+            if result.data:
+                return result.data
+        except Exception:
+            # Allows a zero-downtime deploy: code can ship before the migration is applied.
+            logger.info("Indexed memory search unavailable; using bounded fallback", exc_info=True)
+
+    result = (
         client.table("memories")
         .select("id,screenshot_id,intent,category,item_name,summary,extracted_text,visual_context,frequency,last_seen")
         .eq("user_id", user_id)
         .order("last_seen", desc=True)
         .limit(CANDIDATE_LIMIT)
+        .execute()
     )
-    result = query.execute()
-    candidates = result.data or []
+    return result.data or []
 
+
+def retrieve_memories(user_id: str, parsed: ParsedAskQuery, top_k: int = DEFAULT_TOP_K) -> list[dict]:
+    client = get_client()
+    candidates = _fetch_candidates(client, user_id, parsed)
     ranked = [(score_memory(memory, parsed), memory) for memory in candidates]
     ranked.sort(key=lambda pair: pair[0], reverse=True)
 
-    # Require some actual query evidence for normal searches. Reasoning queries are
-    # allowed a slightly wider fallback so follow-up comparisons can still work.
     threshold = 0.16 if parsed.mode == "retrieve" else 0.10
     matches = [memory for score, memory in ranked if score >= threshold]
     if not matches and parsed.mode == "reason" and ranked:
@@ -123,7 +132,6 @@ def retrieve_memories(user_id: str, parsed: ParsedAskQuery, top_k: int = DEFAULT
 def compose_retrieval_answer(parsed: ParsedAskQuery, memories: list[dict]) -> str:
     if not memories:
         return "I couldn't find a matching saved memory."
-
     if len(memories) == 1:
         memory = memories[0]
         summary = (memory.get("summary") or "").strip()
