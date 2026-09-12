@@ -17,10 +17,12 @@ import { supabase } from '../supabaseClient'
 import { colors } from '../theme'
 import AuthProductDemo from '../components/AuthProductDemo'
 
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim()
+const GOOGLE_WEB_CLIENT_ID =
+  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim() ||
+  '295083436259-48boa1abgmoq9jla0nr58rhmh6v06if0.apps.googleusercontent.com'
 
 GoogleSignin.configure({
-  webClientId: GOOGLE_WEB_CLIENT_ID || undefined,
+  webClientId: GOOGLE_WEB_CLIENT_ID,
   offlineAccess: false,
 })
 
@@ -70,10 +72,6 @@ export default function LoginScreen({ recoveryMode = false, onRecoveryComplete }
     setMessage(null)
     setGoogleLoading(true)
     try {
-      if (!GOOGLE_WEB_CLIENT_ID) {
-        throw new Error('Google sign-in is not configured in this build. Please install the latest Samhaal build.')
-      }
-
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true })
       const response = await GoogleSignin.signIn()
       const idToken = response.data?.idToken ?? response.idToken
