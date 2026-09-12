@@ -3,7 +3,6 @@ import json
 from google import genai
 from google.genai import types
 from google.genai.errors import ClientError, ServerError
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_random_exponential
 from app.models.schema import VisionExtraction
 
 VALID_INTENTS = {
@@ -61,52 +60,55 @@ def _get_client() -> genai.Client:
 
 
 def gemini_error_details(exc: Exception) -> tuple[bool, str]:
-    """Return (retryable, readable_detail) for Gemini/network failures.
-
-    408/429 and 5xx are transient. Other 4xx responses are request/config
-    failures and should not burn the capture worker's retry budget.
-    """
+    """Return (retryable, readable_detail) for Gemini/network failures."""
     code = getattr(exc, "code", None)
     status = getattr(exc, "status_code", None)
     numeric_code = code if isinstance(code, int) else status if isinstance(status, int) else None
 
     if isinstance(exc, ServerError):
         return True, f"{type(exc).__name__}({numeric_code or '5xx'}): {exc}"
-
     if isinstance(exc, ClientError):
         retryable = numeric_code in {408, 409, 425, 429}
         return retryable, f"{type(exc).__name__}({numeric_code or '4xx'}): {exc}"
 
     text = str(exc).lower()
     transient_markers = (
-        "timeout",
-        "timed out",
-        "connection reset",
-        "connection aborted",
-        "temporarily unavailable",
-        "service unavailable",
-        "rate limit",
-        "too many requests",
+        "timeout", "timed out", "connection reset", "connection aborted",
+        "temporarily unavailable", "service unavailable", "rate limit",
+        "too many requests", "resource exhausted",
     )
     retryable = any(marker in text for marker in transient_markers)
     return retryable, f"{type(exc).__name__}: {exc}"
 
 
-def _retryable_gemini_exception(exc: Exception) -> bool:
-    retryable, _ = gemini_error_details(exc)
-    return retryable
+def _usage_metadata(response) -> dict:
+    usage = getattr(response, "usage_metadata", None)
+    if not usage:
+        return {}
+    return {
+        "prompt_tokens": getattr(usage, "prompt_token_count", None),
+        "candidate_tokens": getattr(usage, "candidates_token_count", None),
+        "thinking_tokens": getattr(usage, "thoughts_token_count", None),
+        "total_tokens": getattr(usage, "total_token_count", None),
+    }
 
 
-_GEMINI_RETRY = retry(
-    retry=retry_if_exception(_retryable_gemini_exception),
-    wait=wait_random_exponential(multiplier=1, min=1, max=10),
-    stop=stop_after_attempt(3),
-    reraise=True,
-)
+def _capture_config(model: str, temperature: float) -> types.GenerateContentConfig:
+    kwargs = {
+        "temperature": temperature,
+        "response_mime_type": "application/json",
+    }
+    # Gemini 2.5 Flash supports thinking_budget=0. Intent classification is a
+    # constrained extraction task, so thinking is disabled by default to reduce
+    # token usage and quota pressure. Set GEMINI_CAPTURE_THINKING_BUDGET=-1 to
+    # restore dynamic thinking if an A/B test shows a quality regression.
+    if model.startswith("gemini-2.5"):
+        budget = int(os.environ.get("GEMINI_CAPTURE_THINKING_BUDGET", "0"))
+        kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=budget)
+    return types.GenerateContentConfig(**kwargs)
 
 
-@_GEMINI_RETRY
-def _call_gemini(image_bytes: bytes, mime_type: str, strict_retry: bool = False) -> str:
+def _call_gemini(image_bytes: bytes, mime_type: str, strict_retry: bool = False) -> tuple[str, dict]:
     client = _get_client()
     model = os.environ.get("GEMINI_VISION_MODEL", "gemini-2.5-flash")
     prompt = SYSTEM_PROMPT
@@ -115,9 +117,9 @@ def _call_gemini(image_bytes: bytes, mime_type: str, strict_retry: bool = False)
     response = client.models.generate_content(
         model=model,
         contents=[types.Part.from_bytes(data=image_bytes, mime_type=mime_type), prompt],
-        config=types.GenerateContentConfig(temperature=0.2, response_mime_type="application/json"),
+        config=_capture_config(model, 0.2),
     )
-    return response.text
+    return response.text or "", _usage_metadata(response)
 
 
 def _parse_json_response(raw: str) -> dict:
@@ -146,31 +148,26 @@ def extract_intent_from_screenshot(image_bytes: bytes, mime_type: str = "image/p
     elif not safe_mime.startswith("image/"):
         safe_mime = "image/png"
 
-    raw = _call_gemini(image_bytes, safe_mime, strict_retry=False)
+    raw, _ = _call_gemini(image_bytes, safe_mime, strict_retry=False)
     try:
         parsed = _parse_json_response(raw)
     except (json.JSONDecodeError, ValueError):
-        parsed = _parse_json_response(_call_gemini(image_bytes, safe_mime, strict_retry=True))
+        raw, _ = _call_gemini(image_bytes, safe_mime, strict_retry=True)
+        parsed = _parse_json_response(raw)
     return _normalize_extraction(parsed)
 
 
-@_GEMINI_RETRY
-def extract_intent_from_metadata(
+def _metadata_prompt(
     extracted_text: str,
-    entities: dict | None = None,
-    app_source: str | None = None,
-    ocr_blocks: list[dict] | None = None,
-) -> VisionExtraction:
-    """Privacy-first classifier. No screenshot pixels are sent to the LLM."""
-    client = _get_client()
-    model = os.environ.get("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
-
+    entities: dict | None,
+    app_source: str | None,
+    ocr_blocks: list[dict] | None,
+) -> str:
     entities_str = json.dumps(entities or {}, ensure_ascii=False)
     blocks = ocr_blocks or []
     blocks_str = json.dumps(blocks, ensure_ascii=False, separators=(",", ":")) if blocks else "[]"
     app_str = app_source or "Unknown"
-
-    text_prompt = f"""{SYSTEM_PROMPT}
+    return f"""{SYSTEM_PROMPT}
 
 Source Application / Android package:
 {app_str}
@@ -194,14 +191,28 @@ GEOMETRY GUIDANCE:
 - Still create multiple memory items only for a genuine list of peer items.
 """
 
+
+def extract_intent_from_metadata_with_usage(
+    extracted_text: str,
+    entities: dict | None = None,
+    app_source: str | None = None,
+    ocr_blocks: list[dict] | None = None,
+) -> tuple[VisionExtraction, dict]:
+    """Privacy-first classifier plus provider token telemetry.
+
+    Deliberately performs a single provider request. Durable retry/backoff belongs
+    to capture_worker so a 429 cannot trigger nested retry storms.
+    """
+    client = _get_client()
+    model = os.environ.get("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
     response = client.models.generate_content(
         model=model,
-        contents=[text_prompt],
-        config=types.GenerateContentConfig(temperature=0.12, response_mime_type="application/json"),
+        contents=[_metadata_prompt(extracted_text, entities, app_source, ocr_blocks)],
+        config=_capture_config(model, 0.12),
     )
 
     try:
-        parsed = _parse_json_response(response.text)
+        parsed = _parse_json_response(response.text or "")
     except Exception:
         parsed = {
             "intent": "TRY_LATER",
@@ -211,4 +222,16 @@ GEOMETRY GUIDANCE:
             "extracted_text": extracted_text,
         }
 
-    return _normalize_extraction(parsed, extracted_text)
+    return _normalize_extraction(parsed, extracted_text), _usage_metadata(response)
+
+
+def extract_intent_from_metadata(
+    extracted_text: str,
+    entities: dict | None = None,
+    app_source: str | None = None,
+    ocr_blocks: list[dict] | None = None,
+) -> VisionExtraction:
+    extraction, _ = extract_intent_from_metadata_with_usage(
+        extracted_text, entities, app_source, ocr_blocks
+    )
+    return extraction
