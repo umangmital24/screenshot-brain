@@ -46,9 +46,10 @@ jobs:
 
       - name: Ensure Hermes compiler is executable
         run: |
-          test -f node_modules/hermes-compiler/hermesc/linux64-bin
-          chmod +x node_modules/hermes-compiler/hermesc/linux64-bin
-          test -x node_modules/hermes-compiler/hermesc/linux64-bin
+          HERMES_BIN="node_modules/hermes-compiler/hermesc/linux64-bin/hermesc"
+          test -f "$HERMES_BIN"
+          chmod +x "$HERMES_BIN"
+          test -x "$HERMES_BIN"
 
       - name: Verify required runtime config
         run: |
