@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Samhaal",
+    "slug": "screenshot-memory-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "screenshotmemory",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.umangmittal.screenshotmemory"
+    },
+    "android": {
+      "package": "com.umangmittal.screenshotmemory",
+      "softwareKeyboardLayoutMode": "pan",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-share-intent",
+        {
+          "androidIntentFilters": [
+            "image/*"
+          ],
+          "androidMainActivityName": "MainActivity",
+          "disableAndroidShareExtension": false,
+          "disableIOSShareExtension": true
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "21bccc01-3cda-4985-926e-c5ee87a3bad3"
+      }
+    }
+  }
+}
