@@ -74,6 +74,7 @@ async function ensureCapture(item) {
       clientEventId: item.clientEventId,
       capturedAt: item.capturedAt,
       ocrBlocks: item.ocrBlocks || [],
+      entities: item.entities || {},
     },
   )
   return { captureId: queued.capture_id, current: null }
