@@ -76,3 +76,33 @@ def memory_embedding_text(memory: dict) -> str:
 
 def vector_literal(vector: list[float]) -> str:
     return "[" + ",".join(f"{value:.8f}" for value in vector) + "]"
+
+
+def persist_memory_embeddings(client, memories: list[dict]) -> int:
+    if not memories:
+        return 0
+    vectors = embed_texts(memory_embedding_text(memory) for memory in memories)
+    updated = 0
+    for memory, vector in zip(memories, vectors):
+        memory_id = memory.get("id")
+        if not memory_id or not vector:
+            continue
+        client.table("memories").update({
+            "embedding": vector_literal(vector),
+            "embedding_model": EMBEDDING_MODEL,
+        }).eq("id", memory_id).execute()
+        updated += 1
+    return updated
+
+
+def embed_memory_ids(client, memory_ids: list[str], user_id: str | None = None) -> int:
+    ids = [memory_id for memory_id in memory_ids if memory_id]
+    if not ids:
+        return 0
+    query = client.table("memories").select(
+        "id,item_name,category,intent,summary,extracted_text,visual_context"
+    ).in_("id", ids)
+    if user_id:
+        query = query.eq("user_id", user_id)
+    result = query.execute()
+    return persist_memory_embeddings(client, result.data or [])
