@@ -41,17 +41,34 @@ def _word_match_score(term: str, haystack: str) -> float:
     return 0.0
 
 
-def _recency_score(value: Any) -> float:
+def _age_days(value: Any) -> float | None:
     if not value:
-        return 0.0
+        return None
     try:
         dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        days = max((datetime.now(timezone.utc) - dt).total_seconds() / 86400.0, 0.0)
-        return math.exp(-days / 90.0)
+        return max((datetime.now(timezone.utc) - dt).total_seconds() / 86400.0, 0.0)
     except Exception:
-        return 0.0
+        return None
+
+
+def _recency_score(value: Any) -> float:
+    days = _age_days(value)
+    return math.exp(-days / 90.0) if days is not None else 0.0
+
+
+def _in_time_window(memory: dict, parsed: ParsedAskQuery) -> bool:
+    if parsed.since_days is None and parsed.before_days is None:
+        return True
+    days = _age_days(memory.get("last_seen"))
+    if days is None:
+        return False
+    if parsed.since_days is not None and days > parsed.since_days:
+        return False
+    if parsed.before_days is not None and days < parsed.before_days:
+        return False
+    return True
 
 
 def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
@@ -102,7 +119,6 @@ def _fetch_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict
             if result.data:
                 return result.data
         except Exception:
-            # Allows a zero-downtime deploy: code can ship before the migration is applied.
             logger.info("Indexed memory search unavailable; using bounded fallback", exc_info=True)
 
     result = (
@@ -118,7 +134,7 @@ def _fetch_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict
 
 def retrieve_memories(user_id: str, parsed: ParsedAskQuery, top_k: int = DEFAULT_TOP_K) -> list[dict]:
     client = get_client()
-    candidates = _fetch_candidates(client, user_id, parsed)
+    candidates = [m for m in _fetch_candidates(client, user_id, parsed) if _in_time_window(m, parsed)]
     ranked = [(score_memory(memory, parsed), memory) for memory in candidates]
     ranked.sort(key=lambda pair: pair[0], reverse=True)
 
