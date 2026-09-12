@@ -2,21 +2,36 @@ import { NativeModules, Platform } from 'react-native'
 import { updateMemoryVisualContext } from './api'
 
 const { OnDeviceOcr } = NativeModules
+const VISUAL_INDEX_VERSION = 2
 
 function canAnalyze() {
   return Platform.OS === 'android' && typeof OnDeviceOcr?.analyzeVisual === 'function'
 }
 
+function parseVersion(raw) {
+  if (!raw) return 0
+  try {
+    const parsed = JSON.parse(raw)
+    return Number(parsed?.version || 0)
+  } catch {
+    return 0
+  }
+}
+
 /**
  * Adds privacy-preserving appearance metadata to memories that already have a local
- * screenshot reference. Raw screenshot pixels never leave the phone; only labels/colors
- * such as "Suit, Clothing · black, gray" are sent to the backend.
+ * screenshot reference. Raw screenshot pixels never leave the phone; only derived
+ * semantic labels and color ratios are synchronized to the backend.
  */
-export async function ensureVisualIndexes(memories = [], maxItems = 16) {
+export async function ensureVisualIndexes(memories = [], maxItems = 24) {
   if (!canAnalyze() || !Array.isArray(memories)) return {}
 
   const targets = memories
-    .filter((memory) => memory?.id && memory?.local_image_uri && !memory?.visual_context)
+    .filter((memory) => (
+      memory?.id
+      && memory?.local_image_uri
+      && parseVersion(memory?.visual_context) < VISUAL_INDEX_VERSION
+    ))
     .slice(0, maxItems)
 
   const indexed = {}
