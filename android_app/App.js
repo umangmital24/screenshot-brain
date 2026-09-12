@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { View, ActivityIndicator, Platform, AppState } from 'react-native'
+import { View, ActivityIndicator, Platform, AppState, Linking } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
@@ -28,28 +28,76 @@ const navTheme = {
 
 const Tab = createBottomTabNavigator()
 
+function authParamsFromUrl(url) {
+  if (!url) return null
+  const queryIndex = url.indexOf('?')
+  const hashIndex = url.indexOf('#')
+  const raw = hashIndex >= 0
+    ? url.slice(hashIndex + 1)
+    : queryIndex >= 0
+      ? url.slice(queryIndex + 1)
+      : ''
+
+  if (!raw) return null
+  const params = new URLSearchParams(raw)
+  return {
+    type: params.get('type'),
+    accessToken: params.get('access_token'),
+    refreshToken: params.get('refresh_token'),
+  }
+}
+
 export default function App() {
   const [session, setSession] = useState(undefined)
   const [splashDone, setSplashDone] = useState(false)
+  const [recoveryMode, setRecoveryMode] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession)
-      if (newSession) flushPendingCaptures().catch(() => {})
+    let mounted = true
+
+    const handleAuthLink = async (url) => {
+      const params = authParamsFromUrl(url)
+      if (!params?.accessToken || !params?.refreshToken) return
+
+      if (params.type === 'recovery') setRecoveryMode(true)
+      const { data, error } = await supabase.auth.setSession({
+        access_token: params.accessToken,
+        refresh_token: params.refreshToken,
+      })
+      if (!error && mounted) setSession(data.session)
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) setSession(data.session)
     })
-    return () => listener.subscription.unsubscribe()
+
+    Linking.getInitialURL().then((url) => handleAuthLink(url).catch(() => {}))
+    const linkSub = Linking.addEventListener('url', ({ url }) => {
+      handleAuthLink(url).catch(() => {})
+    })
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true)
+      setSession(newSession)
+      if (newSession && event !== 'PASSWORD_RECOVERY') flushPendingCaptures().catch(() => {})
+    })
+
+    return () => {
+      mounted = false
+      linkSub.remove()
+      listener.subscription.unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
-    if (!session) return undefined
+    if (!session || recoveryMode) return undefined
 
     flushPendingCaptures().catch(() => {})
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') flushPendingCaptures().catch(() => {})
     })
     return () => sub.remove()
-  }, [session])
+  }, [session, recoveryMode])
 
   if (!splashDone) {
     return (
@@ -68,10 +116,10 @@ export default function App() {
     )
   }
 
-  if (!session) {
+  if (!session || recoveryMode) {
     return (
       <ShareIntentProvider>
-        <LoginScreen />
+        <LoginScreen recoveryMode={recoveryMode} onRecoveryComplete={() => setRecoveryMode(false)} />
         <StatusBar style="dark" />
       </ShareIntentProvider>
     )
