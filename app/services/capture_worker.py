@@ -10,7 +10,7 @@ from time import perf_counter
 from supabase import create_client
 
 from app.services.db import get_client
-from app.services.vision import extract_intent_from_metadata
+from app.services.vision import extract_intent_from_metadata, gemini_error_details
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +62,7 @@ def _record_extraction(
 
 
 def _heartbeat_loop(stop_event: threading.Event, job_id: str, worker_id: str) -> None:
-    """Renew the DB lease while a capture is being processed.
-
-    A dedicated Supabase client is used here so the heartbeat thread does not
-    share request/session state with the main worker thread.
-    """
+    """Renew the DB lease while a capture is being processed."""
     client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 
     while not stop_event.wait(HEARTBEAT_SECONDS):
@@ -90,8 +86,6 @@ def _heartbeat_loop(stop_event: threading.Event, job_id: str, worker_id: str) ->
                 )
                 return
         except Exception:
-            # One transient heartbeat failure should not abort useful work. If
-            # failures persist past lease expiry, another worker will recover it.
             logger.warning("Could not renew lease for job %s", job_id, exc_info=True)
 
 
@@ -102,19 +96,16 @@ def _schedule_failure(
     error: Exception,
     *,
     permanent: bool = False,
+    error_message: str | None = None,
 ) -> str:
-    """Atomically transition an owned job to retry/dead.
-
-    Ownership is checked in Postgres so a stale worker can never overwrite a
-    job that another worker has already reclaimed.
-    """
+    """Atomically transition an owned job to retry/dead."""
     client = get_client()
     result = client.rpc(
         "fail_capture_job",
         {
             "p_job_id": job_id,
             "p_worker_id": worker_id,
-            "p_error": str(error)[:1000],
+            "p_error": (error_message or str(error))[:1000],
             "p_max_attempts": attempt if permanent else MAX_ATTEMPTS,
             "p_base_retry_seconds": BASE_RETRY_SECONDS,
         },
@@ -165,8 +156,6 @@ def process_one() -> bool:
 
     capture = capture_result.data[0]
     if capture.get("status") == "completed":
-        # Normally finalize_capture_event has already closed the job. This is a
-        # defensive path for a legacy/inconsistent row.
         _schedule_failure(
             job_id,
             worker_id,
@@ -202,12 +191,56 @@ def process_one() -> bool:
     heartbeat.start()
 
     try:
-        extraction = extract_intent_from_metadata(
-            text,
-            capture.get("entities") or {},
-            capture.get("source"),
-            capture.get("ocr_blocks") or [],
-        )
+        try:
+            extraction = extract_intent_from_metadata(
+                text,
+                capture.get("entities") or {},
+                capture.get("source"),
+                capture.get("ocr_blocks") or [],
+            )
+        except Exception as exc:
+            latency_ms = int((perf_counter() - started) * 1000)
+            retryable, detail = gemini_error_details(exc)
+            logger.exception(
+                "Capture %s Gemini extraction failed on attempt %s | retryable=%s | %s",
+                capture_id,
+                attempt,
+                retryable,
+                detail,
+            )
+            try:
+                _record_extraction(
+                    capture_id,
+                    attempt,
+                    success=False,
+                    model=model,
+                    latency_ms=latency_ms,
+                    input_chars=len(text),
+                    error_type=type(exc).__name__,
+                    error_message=detail[:1000],
+                )
+            except Exception:
+                logger.exception("Failed to record Gemini extraction failure for %s", capture_id)
+
+            try:
+                status = _schedule_failure(
+                    job_id,
+                    worker_id,
+                    attempt,
+                    exc,
+                    permanent=not retryable,
+                    error_message=detail,
+                )
+                logger.warning(
+                    "Capture %s moved to %s after Gemini failure (retryable=%s)",
+                    capture_id,
+                    status,
+                    retryable,
+                )
+            except Exception:
+                logger.exception("Could not record Gemini failure for capture %s", capture_id)
+            return True
+
         latency_ms = int((perf_counter() - started) * 1000)
         normalized = extraction.model_dump()
 
@@ -245,7 +278,7 @@ def process_one() -> bool:
         )
     except Exception as exc:
         latency_ms = int((perf_counter() - started) * 1000)
-        logger.exception("Capture %s failed on attempt %s", capture_id, attempt)
+        logger.exception("Capture %s failed after extraction on attempt %s", capture_id, attempt)
         try:
             _record_extraction(
                 capture_id,
@@ -258,7 +291,7 @@ def process_one() -> bool:
                 error_message=str(exc)[:1000],
             )
         except Exception:
-            logger.exception("Failed to record extraction failure for %s", capture_id)
+            logger.exception("Failed to record post-extraction failure for %s", capture_id)
 
         try:
             status = _schedule_failure(job_id, worker_id, attempt, exc)
@@ -269,8 +302,6 @@ def process_one() -> bool:
                     worker_id,
                 )
         except Exception:
-            # If failure bookkeeping itself fails, the lease will eventually
-            # expire and another worker will recover this job automatically.
             logger.exception("Could not schedule retry for capture %s", capture_id)
     finally:
         stop_heartbeat.set()
