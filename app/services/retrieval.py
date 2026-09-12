@@ -111,15 +111,16 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
 def _fetch_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict]:
     search_query = " ".join((*parsed.terms, *parsed.colors)).strip()
     if search_query:
-        try:
-            result = client.rpc(
-                "search_memories_fts",
-                {"p_user_id": user_id, "p_query": search_query, "p_limit": CANDIDATE_LIMIT},
-            ).execute()
-            if result.data:
-                return result.data
-        except Exception:
-            logger.info("Indexed memory search unavailable; using bounded fallback", exc_info=True)
+        for rpc_name in ("search_memories_hybrid", "search_memories_fts"):
+            try:
+                result = client.rpc(
+                    rpc_name,
+                    {"p_user_id": user_id, "p_query": search_query, "p_limit": CANDIDATE_LIMIT},
+                ).execute()
+                if result.data:
+                    return result.data
+            except Exception:
+                logger.info("%s unavailable; trying fallback", rpc_name, exc_info=True)
 
     result = (
         client.table("memories")
