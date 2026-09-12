@@ -12,10 +12,11 @@ import {
   Image,
   Modal,
   ScrollView,
+  Alert,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { askChat } from '../api'
-import { attachLocalMediaToSources } from '../localMemoryMedia'
+import { askChat, deleteMemory } from '../api'
+import { attachLocalMediaToSources, removeLocalMemoryReference } from '../localMemoryMedia'
 import { colors } from '../theme'
 
 const SUGGESTIONS = [
@@ -26,6 +27,7 @@ const SUGGESTIONS = [
 ]
 
 const CASUAL = /^(hi|hello|hey|thanks|thank you|okay|ok|cool|good morning|good evening)[!.\s]*$/i
+const INITIAL_RESULTS = 3
 
 function cleanAssistantText(value) {
   if (!value) return ''
@@ -49,24 +51,35 @@ function ordinalIndex(text) {
   return null
 }
 
-function ResultCard({ source, onOpen }) {
+function isShortRefinement(text) {
+  const value = String(text || '').trim().toLowerCase()
+  return /^(only\s+.+|recent|latest|newest|last week|this week|last month|this month|black|white|red|blue|green|beige|wine|navy|pink)$/i.test(value)
+}
+
+function ResultCard({ source, onOpen, onDelete }) {
   const canOpen = Boolean(source.local_image_uri)
   return (
-    <TouchableOpacity style={styles.resultCard} activeOpacity={0.86} onPress={canOpen ? () => onOpen(source) : undefined}>
-      {canOpen ? (
-        <Image source={{ uri: source.local_image_uri }} style={styles.resultImage} resizeMode="cover" />
-      ) : (
-        <View style={[styles.resultImage, styles.resultPlaceholder]}>
-          <Ionicons name="image-outline" size={22} color={colors.textFaint} />
-        </View>
-      )}
+    <View style={styles.resultCard}>
+      <TouchableOpacity activeOpacity={canOpen ? 0.86 : 1} onPress={canOpen ? () => onOpen(source) : undefined}>
+        {canOpen ? (
+          <Image source={{ uri: source.local_image_uri }} style={styles.resultImage} resizeMode="cover" />
+        ) : (
+          <View style={[styles.resultImage, styles.resultPlaceholder]}>
+            <Ionicons name="image-outline" size={22} color={colors.textFaint} />
+          </View>
+        )}
+      </TouchableOpacity>
       <Text style={styles.resultName} numberOfLines={2}>{source.item_name || 'Saved memory'}</Text>
       <Text style={styles.resultMeta} numberOfLines={1}>{source.category || source.intent || 'Memory'}</Text>
       <View style={styles.openRow}>
-        <Text style={styles.openText}>{canOpen ? 'Open screenshot' : 'Screenshot unavailable'}</Text>
-        {canOpen ? <Ionicons name="arrow-forward" size={13} color={colors.textSecondary} /> : null}
+        <TouchableOpacity disabled={!canOpen} onPress={() => onOpen(source)} style={!canOpen ? styles.disabledAction : null}>
+          <Text style={styles.openText}>{canOpen ? 'Open screenshot' : 'Unavailable'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => onDelete(source)} style={styles.cardDeleteButton} accessibilityLabel={`Delete ${source.item_name || 'memory'}`}>
+          <Ionicons name="trash-outline" size={14} color="#DC2626" />
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   )
 }
 
@@ -76,54 +89,94 @@ export default function ChatScreen() {
   const [searching, setSearching] = useState(false)
   const [previewSource, setPreviewSource] = useState(null)
   const listRef = useRef(null)
+  const lastSearchQueryRef = useRef('')
 
   const lastSources = useMemo(() => {
     for (let i = log.length - 1; i >= 0; i -= 1) {
+      if (log[i]?.type === 'result' && log[i]?.allSources?.length) return log[i].allSources
       if (log[i]?.type === 'result' && log[i]?.sources?.length) return log[i].sources
     }
     return []
   }, [log])
 
-  function recentHistory() {
-    return log
-      .filter((item) => (item.type === 'user' || item.type === 'result') && item.text)
-      .slice(-8)
-      .map((item) => ({ role: item.type === 'user' ? 'user' : 'assistant', text: item.text }))
-  }
-
   async function runSearch(prefilled) {
-    const q = (typeof prefilled === 'string' ? prefilled : query).trim()
-    if (!q || searching) return
+    const raw = (typeof prefilled === 'string' ? prefilled : query).trim()
+    if (!raw || searching) return
     setQuery('')
-    setLog((prev) => [...prev, { type: 'user', text: q }])
+    setLog((prev) => [...prev, { type: 'user', text: raw }])
 
-    if (CASUAL.test(q)) {
-      setLog((prev) => [...prev, { type: 'result', text: 'Hi! What are you looking for?', sources: [] }])
+    if (CASUAL.test(raw)) {
+      setLog((prev) => [...prev, { type: 'result', text: 'Hi! What are you looking for?', sources: [], allSources: [] }])
       return
     }
 
-    const ordinal = ordinalIndex(q)
-    if (ordinal !== null && /\b(open|show|this|that|one)\b/i.test(q) && lastSources[ordinal]) {
+    const ordinal = ordinalIndex(raw)
+    if (ordinal !== null && /\b(open|show|this|that|one)\b/i.test(raw) && lastSources[ordinal]) {
       setPreviewSource(lastSources[ordinal])
-      setLog((prev) => [...prev, { type: 'result', text: `Opening ${lastSources[ordinal].item_name || 'that memory'}.`, sources: [lastSources[ordinal]] }])
+      setLog((prev) => [...prev, { type: 'result', text: `Opening ${lastSources[ordinal].item_name || 'that memory'}.`, sources: [], allSources: [] }])
       return
     }
+
+    const effectiveQuery = isShortRefinement(raw) && lastSearchQueryRef.current
+      ? `${lastSearchQueryRef.current} ${raw}`
+      : raw
 
     setSearching(true)
     try {
-      const data = await askChat(q, recentHistory())
-      const sources = await attachLocalMediaToSources(data.sources || [])
+      const data = await askChat(effectiveQuery, [])
+      const allSources = await attachLocalMediaToSources(data.sources || [])
+      lastSearchQueryRef.current = effectiveQuery
       setLog((prev) => [...prev, {
         type: 'result',
-        text: cleanAssistantText(data.answer) || (sources.length ? `Found ${sources.length} matching memories.` : "I couldn't find a matching saved memory."),
-        sources,
+        text: cleanAssistantText(data.answer) || (allSources.length ? `Found ${allSources.length} relevant memories.` : "I couldn't find a matching saved memory."),
+        sources: allSources.slice(0, INITIAL_RESULTS),
+        allSources,
+        expanded: false,
+        query: effectiveQuery,
       }])
     } catch (error) {
-      setLog((prev) => [...prev, { type: 'result', text: `I couldn't search your memories right now. ${error.message}`, sources: [], error: true }])
+      setLog((prev) => [...prev, { type: 'result', text: `I couldn't search your memories right now. ${error.message}`, sources: [], allSources: [], error: true }])
     } finally {
       setSearching(false)
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 120)
     }
+  }
+
+  function expandResults(logIndex) {
+    setLog((prev) => prev.map((item, index) => index === logIndex
+      ? { ...item, sources: item.allSources || item.sources, expanded: true }
+      : item))
+  }
+
+  function confirmDeleteSource(source) {
+    Alert.alert(
+      'Delete this memory?',
+      'This removes it from Samhaal. The original screenshot on your phone will not be deleted.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteMemory(source.memory_id)
+              await removeLocalMemoryReference(source.memory_id)
+              setLog((prev) => prev.map((item) => {
+                if (item.type !== 'result') return item
+                return {
+                  ...item,
+                  sources: (item.sources || []).filter((row) => row.memory_id !== source.memory_id),
+                  allSources: (item.allSources || []).filter((row) => row.memory_id !== source.memory_id),
+                }
+              }))
+              if (previewSource?.memory_id === source.memory_id) setPreviewSource(null)
+            } catch (error) {
+              Alert.alert('Could not delete memory', error?.message || 'Please try again.')
+            }
+          },
+        },
+      ],
+    )
   }
 
   return (
@@ -155,7 +208,7 @@ export default function ChatScreen() {
             </View>
           </View>
         }
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           if (item.type === 'user') {
             return <View style={styles.userRow}><View style={styles.userBubble}><Text style={styles.userText}>{item.text}</Text></View></View>
           }
@@ -166,15 +219,23 @@ export default function ChatScreen() {
               </View>
               {item.sources?.length ? (
                 <>
+                  <View style={styles.resultHeaderRow}>
+                    <Text style={styles.resultHeaderText}>Relevant screenshots</Text>
+                    <Text style={styles.resultCount}>{item.allSources?.length || item.sources.length}</Text>
+                  </View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.resultStrip}>
-                    {item.sources.map((source, index) => (
-                      <ResultCard key={source.memory_id || `${source.item_name}-${index}`} source={source} onOpen={setPreviewSource} />
+                    {item.sources.map((source, sourceIndex) => (
+                      <ResultCard key={source.memory_id || `${source.item_name}-${sourceIndex}`} source={source} onOpen={setPreviewSource} onDelete={confirmDeleteSource} />
                     ))}
                   </ScrollView>
                   <View style={styles.chipRow}>
-                    <TouchableOpacity style={styles.chip} onPress={() => runSearch('show more like these')}><Text style={styles.chipText}>Show more</Text></TouchableOpacity>
-                    <TouchableOpacity style={styles.chip} onPress={() => runSearch('show only recent matches')}><Text style={styles.chipText}>Recent</Text></TouchableOpacity>
-                    <TouchableOpacity style={styles.chip} onPress={() => setPreviewSource(item.sources[0])}><Text style={styles.chipText}>Open first</Text></TouchableOpacity>
+                    {(item.allSources?.length || 0) > item.sources.length ? (
+                      <TouchableOpacity style={styles.chip} onPress={() => expandResults(index)}><Text style={styles.chipText}>Show more</Text></TouchableOpacity>
+                    ) : null}
+                    <TouchableOpacity style={styles.chip} onPress={() => runSearch('recent')}><Text style={styles.chipText}>Recent only</Text></TouchableOpacity>
+                    {item.sources[0]?.local_image_uri ? (
+                      <TouchableOpacity style={styles.chip} onPress={() => setPreviewSource(item.sources[0])}><Text style={styles.chipText}>Open first</Text></TouchableOpacity>
+                    ) : null}
                   </View>
                 </>
               ) : null}
@@ -245,7 +306,10 @@ const styles = StyleSheet.create({
   answerBubble: { borderWidth: 1, borderColor: colors.borderSubtle, backgroundColor: colors.surface, borderRadius: 13, padding: 13 },
   errorBubble: { borderColor: 'rgba(220,38,38,0.18)', backgroundColor: '#FFF8F8' },
   answerText: { color: colors.text, fontSize: 14, lineHeight: 21 },
-  resultStrip: { gap: 10, paddingTop: 10, paddingBottom: 3 },
+  resultHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
+  resultHeaderText: { fontSize: 10.5, color: colors.textFaint, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
+  resultCount: { fontSize: 10.5, color: colors.textFaint },
+  resultStrip: { gap: 10, paddingTop: 8, paddingBottom: 3 },
   resultCard: { width: 178, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: 14, padding: 9, backgroundColor: colors.surface },
   resultImage: { width: '100%', height: 130, borderRadius: 10, backgroundColor: colors.surfaceMuted },
   resultPlaceholder: { alignItems: 'center', justifyContent: 'center' },
@@ -253,6 +317,8 @@ const styles = StyleSheet.create({
   resultMeta: { marginTop: 3, fontSize: 10.5, color: colors.textFaint },
   openRow: { marginTop: 9, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   openText: { fontSize: 10.5, color: colors.textSecondary, fontWeight: '600' },
+  cardDeleteButton: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#FFF5F5', alignItems: 'center', justifyContent: 'center' },
+  disabledAction: { opacity: 0.35 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 9 },
   chip: { borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: colors.surface },
   chipText: { fontSize: 11.5, color: colors.textSecondary, fontWeight: '600' },
