@@ -55,6 +55,22 @@ export async function fetchMemories(intent) {
   return res.json()
 }
 
+export async function updateMemoryVisualContext(memoryId, visualContext) {
+  requireApiBase()
+  const clean = String(visualContext || '').trim()
+  if (!memoryId || !clean) return null
+
+  const headers = await authHeaders({ 'Content-Type': 'application/json' })
+  const res = await fetch(`${API_BASE}/memories/${encodeURIComponent(memoryId)}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ visual_context: clean.slice(0, 2000) }),
+  })
+  const data = await readJson(res)
+  if (!res.ok) throw apiError(data.detail || 'Could not update visual index', res.status, data)
+  return data.memory || null
+}
+
 export async function fetchSummary() {
   requireApiBase()
   const headers = await authHeaders()
