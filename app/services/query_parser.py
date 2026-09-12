@@ -19,12 +19,15 @@ INTENT_HINTS = {
     "READ_LATER": {"book", "books", "article", "articles", "read", "reading"},
     # "show" is intentionally excluded: it is commonly a search command ("show me shoes"),
     # while "shows" remains useful for TV/streaming memories.
-    "WATCH_LATER": {"movie", "movies", "film", "films", "series", "shows", "watch", "reel", "video", "videos"},
-    "BUY_LATER": {"buy", "product", "products", "shoe", "shoes", "shirt", "shirts", "jacket", "jackets", "laptop", "phone"},
-    "COOK_LATER": {"recipe", "recipes", "cook", "cooking", "dish", "food"},
+    "WATCH_LATER": {"movie", "movies", "film", "films", "series", "shows", "watch", "reel", "reels", "video", "videos"},
+    "BUY_LATER": {
+        "buy", "product", "products", "shoe", "shoes", "shirt", "shirts", "jacket", "jackets",
+        "laptop", "laptops", "phone", "phones", "headphone", "headphones", "watch", "watches",
+    },
+    "COOK_LATER": {"recipe", "recipes", "cook", "cooking", "dish", "dishes", "food"},
     "VISIT_LATER": {"restaurant", "restaurants", "cafe", "cafes", "place", "places", "visit", "travel", "hotel", "hotels"},
     "LEARN_LATER": {"course", "courses", "tutorial", "tutorials", "learn", "learning", "study"},
-    "APPLY_LATER": {"job", "jobs", "role", "roles", "apply", "application", "internship", "internships"},
+    "APPLY_LATER": {"job", "jobs", "role", "roles", "apply", "application", "applications", "internship", "internships"},
     "TRY_LATER": {"try", "idea", "ideas", "tool", "tools", "app", "apps"},
 }
 
