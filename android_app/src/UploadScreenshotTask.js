@@ -56,6 +56,12 @@ export default async function uploadScreenshotTask(data) {
   if (!extractedText && !filePath) return
 
   reportDebugStage('JS headless task running')
+
+  // A Save Bubble tap should feel instant. Once native capture + on-device OCR hand
+  // the job to this headless task, release the bubble immediately. Upload, backend
+  // classification and memory creation continue independently in the background.
+  reportBubblePending('Captured. Samhaal will finish this memory in the background.')
+
   reportDebugStage('Checking signed-in session')
 
   const { data: sessionData } = await supabase.auth.getSession()
