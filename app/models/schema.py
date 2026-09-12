@@ -31,6 +31,7 @@ class MemoryOut(BaseModel):
     item_type: Optional[str] = None
     summary: Optional[str] = None
     extracted_text: Optional[str] = None
+    visual_context: Optional[str] = None
     image_url: Optional[str] = None
     is_done: bool = False
     frequency: int
@@ -44,6 +45,7 @@ class MemoryUpdate(BaseModel):
     category: Optional[str] = Field(None, max_length=120)
     item_name: Optional[str] = Field(None, min_length=1, max_length=300)
     summary: Optional[str] = Field(None, max_length=1000)
+    visual_context: Optional[str] = Field(None, max_length=2000)
 
     @field_validator("intent")
     @classmethod
@@ -54,6 +56,14 @@ class MemoryUpdate(BaseModel):
         if normalized not in VALID_INTENTS:
             raise ValueError("Unsupported intent")
         return normalized
+
+    @field_validator("visual_context")
+    @classmethod
+    def clean_visual_context(cls, value):
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
 
 
 class ChatRequest(BaseModel):
@@ -84,6 +94,7 @@ class ChatSource(BaseModel):
     category: Optional[str] = None
     summary: Optional[str] = None
     extracted_text: Optional[str] = None
+    visual_context: Optional[str] = None
     image_url: Optional[str] = None
 
 
