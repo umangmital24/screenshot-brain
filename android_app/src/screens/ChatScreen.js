@@ -21,13 +21,29 @@ const SUGGESTIONS = [
   'Show me things I wanted to buy',
 ]
 
+function cleanAssistantText(value) {
+  if (!value) return ''
+
+  return String(value)
+    .replace(/\r\n/g, '\n')
+    .replace(/^\s*[*-]\s+/gm, '• ')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '$1')
+    .replace(/_([^_\n]+)_/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/#{1,6}\s*/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 function SourceCard({ source }) {
   return (
     <View style={styles.sourceCard}>
       <Ionicons name="document-text-outline" size={15} color={colors.textSecondary} />
       <View style={{ flex: 1 }}>
         <Text style={styles.sourceName} numberOfLines={1}>{source.item_name || 'Saved memory'}</Text>
-        {source.extracted_text ? <Text style={styles.sourceDetail} numberOfLines={2}>{source.extracted_text}</Text> : null}
+        {source.extracted_text ? <Text style={styles.sourceDetail} numberOfLines={2}>{cleanAssistantText(source.extracted_text)}</Text> : null}
       </View>
     </View>
   )
@@ -48,7 +64,14 @@ export default function ChatScreen() {
 
     try {
       const data = await askChat(q)
-      setLog((prev) => [...prev, { type: 'assistant', text: data.answer, sources: data.sources || [] }])
+      setLog((prev) => [
+        ...prev,
+        {
+          type: 'assistant',
+          text: cleanAssistantText(data.answer),
+          sources: data.sources || [],
+        },
+      ])
     } catch (err) {
       setLog((prev) => [...prev, { type: 'assistant', text: `I couldn't search your memories right now. ${err.message}`, sources: [], error: true }])
     } finally {
