@@ -3,13 +3,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-REASONING_TERMS = {
-    "compare", "comparison", "summarize", "summary", "recommend", "recommendation",
-    "best", "better", "worse", "why", "explain", "choose", "pick", "rank", "ranking",
-    "pros", "cons", "difference", "differences", "similarities", "should i", "which is better",
-    "which one", "what about", "first one", "second one", "third one", "the first", "the second", "the third",
-}
-
 COLORS = {
     "black", "white", "gray", "grey", "light gray", "red", "wine", "maroon", "orange",
     "brown", "beige", "cream", "yellow", "green", "cyan", "blue", "navy", "purple", "pink",
@@ -17,27 +10,25 @@ COLORS = {
 
 INTENT_HINTS = {
     "READ_LATER": {"book", "books", "article", "articles", "read", "reading"},
-    # "show" is intentionally excluded: it is commonly a search command ("show me shoes"),
-    # while "shows" remains useful for TV/streaming memories.
     "WATCH_LATER": {"movie", "movies", "film", "films", "series", "shows", "watch", "reel", "reels", "video", "videos"},
     "BUY_LATER": {
         "buy", "product", "products", "shoe", "shoes", "shirt", "shirts", "jacket", "jackets",
-        "laptop", "laptops", "phone", "phones", "headphone", "headphones", "watch", "watches",
+        "suit", "suits", "dress", "dresses", "laptop", "laptops", "phone", "phones",
+        "headphone", "headphones", "watch", "watches",
     },
     "COOK_LATER": {"recipe", "recipes", "cook", "cooking", "dish", "dishes", "food"},
     "VISIT_LATER": {"restaurant", "restaurants", "cafe", "cafes", "place", "places", "visit", "travel", "hotel", "hotels"},
     "LEARN_LATER": {"course", "courses", "tutorial", "tutorials", "learn", "learning", "study"},
-    "APPLY_LATER": {"job", "jobs", "role", "roles", "apply", "application", "applications", "internship", "internships"},
+    "APPLY_LATER": {"job", "jobs", "role", "roles", "apply", "application", "applications", "internship", "internships", "hiring"},
     "TRY_LATER": {"try", "idea", "ideas", "tool", "tools", "app", "apps"},
 }
 
 STOPWORDS = {
     "a", "about", "an", "and", "are", "as", "at", "be", "did", "do", "for", "from", "i", "in", "is",
     "it", "me", "my", "of", "on", "one", "or", "please", "save", "saved", "samhaal", "show", "that", "the",
-    "this", "to", "was", "what", "where", "which", "with", "you", "find", "memory", "memories",
-    "compare", "comparison", "summarize", "summary", "recommend", "recommendation", "best", "better", "worse",
-    "why", "explain", "choose", "pick", "rank", "ranking", "first", "second", "third", "two",
-    "today", "yesterday", "week", "month", "last",
+    "this", "to", "was", "what", "where", "which", "with", "you", "find", "memory", "memories", "screenshot",
+    "screenshots", "screenshoted", "screenshotted", "open", "give", "get", "tell", "today", "yesterday", "week",
+    "month", "last", "wala", "wali", "wale", "wo", "woh", "maine", "mene", "mera", "meri", "mere",
 }
 
 
@@ -54,18 +45,6 @@ class ParsedAskQuery:
 
 def _tokens(text: str) -> list[str]:
     return re.findall(r"[a-z0-9+#.-]+", text.lower())
-
-
-def _detect_mode(text: str) -> str:
-    normalized = " ".join(_tokens(text))
-    padded = f" {normalized} "
-    for term in REASONING_TERMS:
-        if " " in term:
-            if term in normalized:
-                return "reason"
-        elif f" {term} " in padded:
-            return "reason"
-    return "retrieve"
 
 
 def _detect_intent(tokens: list[str]) -> str | None:
@@ -112,9 +91,11 @@ def parse_ask_query(question: str) -> ParsedAskQuery:
         if token not in terms:
             terms.append(token)
 
+    # Samhaal is a memory retrieval product. Natural language is used to express
+    # search constraints, not to route into recommendation/advice reasoning modes.
     return ParsedAskQuery(
         raw=raw,
-        mode=_detect_mode(raw),
+        mode="retrieve",
         terms=tuple(terms[:12]),
         colors=colors,
         intent=_detect_intent(tokens),
