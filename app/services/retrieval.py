@@ -8,10 +8,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.services.db import get_client
+from app.services.embeddings import embed_text, vector_literal
 from app.services.query_parser import ParsedAskQuery
 
 logger = logging.getLogger(__name__)
 CANDIDATE_LIMIT = 250
+VECTOR_CANDIDATE_LIMIT = 80
 DEFAULT_TOP_K = 8
 
 
@@ -91,24 +93,67 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
                 _word_match_score(term, visual) * 0.65,
             )
             term_scores.append(best)
-        score += sum(term_scores) / len(term_scores) * 0.68
+        score += sum(term_scores) / len(term_scores) * 0.58
     else:
-        score += 0.15
+        score += 0.12
+
+    vector_similarity = float(memory.get("vector_similarity") or 0.0)
+    if vector_similarity > 0:
+        score += min(max(vector_similarity, 0.0), 1.0) * 0.24
 
     if parsed.colors:
         matched_colors = sum(1 for color in parsed.colors if color in visual or color in searchable)
-        score += 0.18 * (matched_colors / len(parsed.colors)) if matched_colors else -0.12
+        score += 0.16 * (matched_colors / len(parsed.colors)) if matched_colors else -0.12
 
     if parsed.intent:
-        score += 0.09 if _text(memory.get("intent")) == parsed.intent.lower() else -0.02
+        score += 0.08 if _text(memory.get("intent")) == parsed.intent.lower() else -0.02
 
-    score += 0.035 * _recency_score(memory.get("last_seen"))
+    score += 0.03 * _recency_score(memory.get("last_seen"))
     frequency = max(int(memory.get("frequency") or 1), 1)
-    score += min(math.log2(frequency + 1) / 10.0, 0.025)
+    score += min(math.log2(frequency + 1) / 10.0, 0.02)
     return score
 
 
-def _fetch_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict]:
+def _merge_candidates(*groups: list[dict]) -> list[dict]:
+    merged: dict[str, dict] = {}
+    for group in groups:
+        for row in group:
+            memory_id = str(row.get("id") or "")
+            if not memory_id:
+                continue
+            existing = merged.get(memory_id)
+            if existing is None:
+                merged[memory_id] = dict(row)
+                continue
+            vector_similarity = row.get("vector_similarity")
+            if vector_similarity is not None:
+                existing["vector_similarity"] = vector_similarity
+    return list(merged.values())
+
+
+def _fetch_vector_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict]:
+    semantic_query = " ".join((*parsed.terms, *parsed.colors)).strip() or parsed.raw.strip()
+    if not semantic_query:
+        return []
+    try:
+        vector = embed_text(semantic_query)
+        if not vector:
+            return []
+        result = client.rpc(
+            "search_memories_vector",
+            {
+                "p_user_id": user_id,
+                "p_query_embedding": vector_literal(vector),
+                "p_limit": VECTOR_CANDIDATE_LIMIT,
+            },
+        ).execute()
+        return result.data or []
+    except Exception:
+        logger.warning("Vector retrieval unavailable; continuing with lexical retrieval", exc_info=True)
+        return []
+
+
+def _fetch_lexical_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict]:
     search_query = " ".join((*parsed.terms, *parsed.colors)).strip()
     if search_query:
         for rpc_name in ("search_memories_hybrid", "search_memories_fts"):
@@ -133,13 +178,19 @@ def _fetch_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict
     return result.data or []
 
 
+def _fetch_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict]:
+    lexical = _fetch_lexical_candidates(client, user_id, parsed)
+    vector = _fetch_vector_candidates(client, user_id, parsed)
+    return _merge_candidates(lexical, vector)
+
+
 def retrieve_memories(user_id: str, parsed: ParsedAskQuery, top_k: int = DEFAULT_TOP_K) -> list[dict]:
     client = get_client()
     candidates = [m for m in _fetch_candidates(client, user_id, parsed) if _in_time_window(m, parsed)]
     ranked = [(score_memory(memory, parsed), memory) for memory in candidates]
     ranked.sort(key=lambda pair: pair[0], reverse=True)
 
-    threshold = 0.16 if parsed.mode == "retrieve" else 0.10
+    threshold = 0.15 if parsed.mode == "retrieve" else 0.09
     matches = [memory for score, memory in ranked if score >= threshold]
     if not matches and parsed.mode == "reason" and ranked:
         matches = [memory for _, memory in ranked[: min(top_k, 4)]]
