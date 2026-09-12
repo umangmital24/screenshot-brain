@@ -8,12 +8,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.services.db import get_client
-from app.services.embeddings import embed_text, vector_literal
+from app.services.embeddings import embed_text, persist_memory_embeddings, vector_literal
 from app.services.query_parser import ParsedAskQuery
 
 logger = logging.getLogger(__name__)
 CANDIDATE_LIMIT = 250
 VECTOR_CANDIDATE_LIMIT = 80
+LAZY_EMBED_LIMIT = 24
 DEFAULT_TOP_K = 8
 
 
@@ -131,6 +132,25 @@ def _merge_candidates(*groups: list[dict]) -> list[dict]:
     return list(merged.values())
 
 
+def _ensure_recent_embeddings(client, user_id: str) -> None:
+    try:
+        result = (
+            client.table("memories")
+            .select("id,item_name,category,intent,summary,extracted_text,visual_context")
+            .eq("user_id", user_id)
+            .is_("embedding", "null")
+            .order("last_seen", desc=True)
+            .limit(LAZY_EMBED_LIMIT)
+            .execute()
+        )
+        memories = result.data or []
+        if memories:
+            updated = persist_memory_embeddings(client, memories)
+            logger.info("Lazily embedded %d memories for user %s", updated, user_id)
+    except Exception:
+        logger.warning("Lazy memory embedding failed; continuing without vectors", exc_info=True)
+
+
 def _fetch_vector_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict]:
     semantic_query = " ".join((*parsed.terms, *parsed.colors)).strip() or parsed.raw.strip()
     if not semantic_query:
@@ -179,6 +199,7 @@ def _fetch_lexical_candidates(client, user_id: str, parsed: ParsedAskQuery) -> l
 
 
 def _fetch_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict]:
+    _ensure_recent_embeddings(client, user_id)
     lexical = _fetch_lexical_candidates(client, user_id, parsed)
     vector = _fetch_vector_candidates(client, user_id, parsed)
     return _merge_candidates(lexical, vector)
