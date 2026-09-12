@@ -17,9 +17,11 @@ import {
 import { useFocusEffect } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as ImagePicker from 'expo-image-picker'
 import { supabase } from '../supabaseClient'
-import { fetchMemories } from '../api'
+import { deleteMemory, fetchMemories } from '../api'
 import { attachLocalMedia } from '../localMemoryMedia'
+import { processGalleryUploadQueue, retryGalleryUploadItem } from '../galleryUploadQueue'
 import { colors, intentLabel, timeAgo } from '../theme'
 import OverlaySetupGuide from '../components/OverlaySetupGuide'
 import {
@@ -68,19 +70,9 @@ const SAMPLE_MEMORIES = [
     frequency: 1,
     demo: true,
   },
-  {
-    id: 'sample-3',
-    intent: 'READ_LATER',
-    item_name: 'Designing Data-Intensive Applications',
-    summary: 'Book recommendation saved to come back to later.',
-    category: 'Books',
-    last_seen: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-    frequency: 1,
-    demo: true,
-  },
 ]
 
-function MemoryCard({ memory, onOpenImage }) {
+function MemoryCard({ memory, onOpenImage, onDelete }) {
   return (
     <View style={[styles.card, memory.demo && styles.demoCard]}>
       {memory.local_image_uri ? (
@@ -99,11 +91,54 @@ function MemoryCard({ memory, onOpenImage }) {
 
       <View style={styles.cardTopRow}>
         <Text style={styles.intent}>{intentLabel(memory.intent)}</Text>
-        <Text style={styles.timeText}>{memory.demo ? 'Example' : timeAgo(memory.last_seen)}</Text>
+        <View style={styles.cardActions}>
+          <Text style={styles.timeText}>{memory.demo ? 'Example' : timeAgo(memory.last_seen)}</Text>
+          {!memory.demo ? (
+            <TouchableOpacity onPress={() => onDelete(memory)} style={styles.deleteButton} accessibilityLabel={`Delete ${memory.item_name}`}>
+              <Ionicons name="trash-outline" size={16} color="#DC2626" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
       <Text style={styles.itemName}>{memory.item_name}</Text>
       {memory.summary ? <Text style={styles.summary}>{memory.summary}</Text> : null}
       <Text style={styles.category}>{memory.category || 'Saved memory'}</Text>
+    </View>
+  )
+}
+
+function UploadQueuePanel({ queue, onRetry }) {
+  if (!queue.length) return null
+  const saved = queue.filter((item) => item.status === 'saved').length
+  const failed = queue.filter((item) => item.status === 'failed').length
+  const active = queue.some((item) => ['queued', 'ocr', 'processing'].includes(item.status))
+
+  return (
+    <View style={styles.queuePanel}>
+      <View style={styles.queueHeader}>
+        <View>
+          <Text style={styles.queueTitle}>Screenshot import</Text>
+          <Text style={styles.queueProgress}>{saved}/{queue.length} saved{failed ? ` · ${failed} failed` : ''}</Text>
+        </View>
+        {active ? <ActivityIndicator color={colors.black} /> : <Ionicons name="checkmark-circle-outline" size={20} color={colors.textMuted} />}
+      </View>
+      {queue.slice(0, 6).map((item) => (
+        <View key={item.id} style={styles.queueRow}>
+          <Ionicons
+            name={item.status === 'saved' ? 'checkmark-circle' : item.status === 'failed' ? 'alert-circle-outline' : 'time-outline'}
+            size={16}
+            color={item.status === 'failed' ? '#DC2626' : colors.textMuted}
+          />
+          <Text style={styles.queueName} numberOfLines={1}>{item.fileName}</Text>
+          <Text style={styles.queueStatus}>{item.status === 'ocr' ? 'OCR' : item.status}</Text>
+          {item.status === 'failed' ? (
+            <TouchableOpacity onPress={() => onRetry(item)}>
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ))}
+      {queue.length > 6 ? <Text style={styles.queueMore}>+ {queue.length - 6} more</Text> : null}
     </View>
   )
 }
@@ -121,6 +156,8 @@ export default function DashboardScreen() {
   const [previewImageUri, setPreviewImageUri] = useState(null)
   const [accountVisible, setAccountVisible] = useState(false)
   const [accountEmail, setAccountEmail] = useState('')
+  const [uploadQueue, setUploadQueue] = useState([])
+  const [importing, setImporting] = useState(false)
   const awaitingSettingsReturn = useRef(false)
 
   const refreshNativeScreenshotState = useCallback(async () => {
@@ -139,17 +176,11 @@ export default function DashboardScreen() {
     setBubbleSupported(supported)
     setBubbleEnabled(enabled)
     setBubbleVisible(visible)
-
     if (allowAutoGuide && supported && !enabled) {
       const seen = await AsyncStorage.getItem(SETUP_SEEN_KEY)
       if (!seen) setSetupGuideVisible(true)
     }
   }, [])
-
-  useEffect(() => {
-    refreshBubbleState(true)
-    refreshNativeScreenshotState()
-  }, [refreshBubbleState, refreshNativeScreenshotState])
 
   const load = useCallback(async (showFullLoader = true) => {
     if (showFullLoader) setLoading(true)
@@ -158,16 +189,18 @@ export default function DashboardScreen() {
       const withLocalMedia = await attachLocalMedia(data.memories || [])
       setMemories(withLocalMedia)
     } catch (err) {
-      if (showFullLoader) {
-        Alert.alert('Could not load your memories', err.message)
-      } else {
-        console.warn('Silent refresh failed:', err.message)
-      }
+      if (showFullLoader) Alert.alert('Could not load your memories', err.message)
+      else console.warn('Silent refresh failed:', err.message)
     } finally {
       if (showFullLoader) setLoading(false)
       setRefreshing(false)
     }
   }, [])
+
+  useEffect(() => {
+    refreshBubbleState(true)
+    refreshNativeScreenshotState()
+  }, [refreshBubbleState, refreshNativeScreenshotState])
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true)
@@ -192,27 +225,20 @@ export default function DashboardScreen() {
   }, [load, refreshBubbleState, refreshNativeScreenshotState])
 
   useEffect(() => {
-    const sub = DeviceEventEmitter.addListener('memoriesUpdated', () => {
-      load(false)
-    })
+    const sub = DeviceEventEmitter.addListener('memoriesUpdated', () => load(false))
     return () => sub.remove()
   }, [load])
 
-  useFocusEffect(
-    useCallback(() => {
-      load(memories.length === 0)
-      refreshBubbleState(false)
-      refreshNativeScreenshotState()
-      return undefined
-    }, [load, refreshBubbleState, refreshNativeScreenshotState, memories.length])
-  )
+  useFocusEffect(useCallback(() => {
+    load(memories.length === 0)
+    refreshBubbleState(false)
+    refreshNativeScreenshotState()
+    return undefined
+  }, [load, refreshBubbleState, refreshNativeScreenshotState, memories.length]))
 
   async function handleBubbleCardPress() {
     if (!bubbleSupported) return
-    if (!bubbleEnabled) {
-      setSetupGuideVisible(true)
-      return
-    }
+    if (!bubbleEnabled) return setSetupGuideVisible(true)
     if (!bubbleVisible) {
       showSaveBubble()
       setTimeout(() => refreshBubbleState(false), 150)
@@ -223,49 +249,87 @@ export default function DashboardScreen() {
 
   async function toggleNativeScreenshotDetection() {
     if (!bubbleSupported) return
-
     if (nativeScreenshotDetection) {
       setNativeScreenshotDetectionEnabled(false)
       setNativeScreenshotDetectionState(false)
       return
     }
-
     if (!bubbleEnabled) {
-      Alert.alert(
-        'Enable Samhaal access first',
-        'Screenshot suggestions use the same Android Accessibility service as the Save Bubble. Enable it once, then turn this option on.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Open setup', onPress: () => setSetupGuideVisible(true) },
-        ],
-      )
+      Alert.alert('Enable Samhaal access first', 'Screenshot suggestions use the same Android Accessibility service as the Save Bubble.', [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Open setup', onPress: () => setSetupGuideVisible(true) },
+      ])
       return
     }
-
     let access = screenshotMediaAccess || await hasScreenshotMediaAccess()
     if (!access) {
       const permission = screenshotPermission()
       if (!permission) return
       const result = await PermissionsAndroid.request(permission, {
         title: 'Allow screenshot suggestions',
-        message: 'Samhaal needs photo access only to notice newly created screenshots. It does not read screenshot pixels unless you tap Save to Samhaal.',
+        message: 'Samhaal needs photo access only to notice newly created screenshots.',
         buttonPositive: 'Allow',
         buttonNegative: 'Not now',
       })
       access = result === PermissionsAndroid.RESULTS.GRANTED
       setScreenshotMediaAccess(access)
     }
-
-    if (!access) {
-      Alert.alert(
-        'Photo access is required',
-        'To notice normal Android screenshots, Samhaal needs access to images. You can keep using the Save Bubble without this permission.',
-      )
-      return
-    }
-
+    if (!access) return Alert.alert('Photo access is required', 'You can keep using the Save Bubble without this permission.')
     setNativeScreenshotDetectionEnabled(true)
     setNativeScreenshotDetectionState(true)
+  }
+
+  async function importScreenshots() {
+    if (importing) return
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      orderedSelection: true,
+      quality: 1,
+      selectionLimit: 50,
+    })
+    if (result.canceled || !result.assets?.length) return
+    setImporting(true)
+    try {
+      await processGalleryUploadQueue(result.assets, setUploadQueue)
+      DeviceEventEmitter.emit('memoriesUpdated')
+      await load(false)
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  async function retryUpload(item) {
+    setUploadQueue((prev) => prev.map((row) => row.id === item.id ? { ...row, status: 'ocr', error: null } : row))
+    try {
+      const result = await retryGalleryUploadItem(item)
+      setUploadQueue((prev) => prev.map((row) => row.id === item.id ? { ...row, status: result.status === 'completed' ? 'saved' : 'processing' } : row))
+      await load(false)
+    } catch (error) {
+      setUploadQueue((prev) => prev.map((row) => row.id === item.id ? { ...row, status: 'failed', error: error?.message || 'Upload failed' } : row))
+    }
+  }
+
+  function confirmDelete(memory) {
+    Alert.alert(
+      'Delete this memory?',
+      'This removes it from Samhaal. Your original screenshot on this phone will not be deleted.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteMemory(memory.id)
+              setMemories((prev) => prev.filter((item) => item.id !== memory.id))
+            } catch (error) {
+              Alert.alert('Could not delete memory', error?.message || 'Please try again.')
+            }
+          },
+        },
+      ],
+    )
   }
 
   async function continueToSettings() {
@@ -283,28 +347,15 @@ export default function DashboardScreen() {
     try {
       const { data } = await supabase.auth.getUser()
       setAccountEmail(data?.user?.email || '')
-    } catch {
-      setAccountEmail('')
-    }
+    } catch { setAccountEmail('') }
     setAccountVisible(true)
   }
 
   function confirmLogout() {
-    Alert.alert(
-      'Log out of Samhaal?',
-      'You can sign back in anytime. Your saved memories stay in your account.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log out',
-          style: 'destructive',
-          onPress: async () => {
-            setAccountVisible(false)
-            await supabase.auth.signOut()
-          },
-        },
-      ],
-    )
+    Alert.alert('Log out of Samhaal?', 'You can sign back in anytime. Your saved memories stay in your account.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log out', style: 'destructive', onPress: async () => { setAccountVisible(false); await supabase.auth.signOut() } },
+    ])
   }
 
   const cardData = useMemo(() => (memories.length ? memories : SAMPLE_MEMORIES), [memories])
@@ -314,7 +365,7 @@ export default function DashboardScreen() {
       <FlatList
         data={loading ? [] : cardData}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <MemoryCard memory={item} onOpenImage={setPreviewImageUri} />}
+        renderItem={({ item }) => <MemoryCard memory={item} onOpenImage={setPreviewImageUri} onDelete={confirmDelete} />}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         refreshing={refreshing}
@@ -331,14 +382,20 @@ export default function DashboardScreen() {
                 <Ionicons name="person-outline" size={18} color={colors.text} />
               </TouchableOpacity>
             </View>
+            <Text style={styles.subtitle}>Save screenshots now. Find the exact one later.</Text>
 
-            <Text style={styles.subtitle}>Tap the Save Bubble anywhere. Samhaal turns that screen into something you can find later.</Text>
+            <TouchableOpacity style={styles.uploadButton} onPress={importScreenshots} disabled={importing}>
+              <Ionicons name="images-outline" size={19} color={colors.white} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.uploadTitle}>{importing ? 'Importing screenshots…' : 'Upload screenshots'}</Text>
+                <Text style={styles.uploadCopy}>Select multiple images · OCR stays on-device</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={17} color="#D4D4D8" />
+            </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.bubbleCard, bubbleEnabled && bubbleVisible && styles.bubbleCardEnabled]}
-              onPress={handleBubbleCardPress}
-              activeOpacity={bubbleSupported ? 0.8 : 1}
-            >
+            <UploadQueuePanel queue={uploadQueue} onRetry={retryUpload} />
+
+            <TouchableOpacity style={[styles.bubbleCard, bubbleEnabled && bubbleVisible && styles.bubbleCardEnabled]} onPress={handleBubbleCardPress} activeOpacity={bubbleSupported ? 0.8 : 1}>
               <View style={[styles.bubblePreview, bubbleEnabled && bubbleVisible && styles.bubblePreviewEnabled]}>
                 <Text style={[styles.bubbleGlyph, bubbleEnabled && bubbleVisible && styles.bubbleGlyphEnabled]}>✦</Text>
               </View>
@@ -347,39 +404,16 @@ export default function DashboardScreen() {
                   <Text style={styles.bubbleTitle}>Save Bubble</Text>
                   <View style={[styles.statusDot, bubbleEnabled && bubbleVisible && styles.statusDotEnabled]} />
                 </View>
-                <Text style={styles.bubbleCopy}>
-                  {!bubbleSupported
-                    ? 'Requires Android 11 or newer.'
-                    : !bubbleEnabled
-                      ? 'Off · enable once in Android Accessibility settings.'
-                      : bubbleVisible
-                        ? 'On · drag it anywhere; it snaps to the nearest edge.'
-                        : 'Hidden · tap here to show the bubble again.'}
-                </Text>
+                <Text style={styles.bubbleCopy}>{!bubbleSupported ? 'Requires Android 11 or newer.' : !bubbleEnabled ? 'Off · enable once in Android Accessibility settings.' : bubbleVisible ? 'On · drag it anywhere; it snaps to the nearest edge.' : 'Hidden · tap here to show the bubble again.'}</Text>
               </View>
               {bubbleSupported ? <Ionicons name="chevron-forward" size={17} color={colors.textFaint} /> : null}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.nativeShotCard, nativeScreenshotDetection && screenshotMediaAccess && styles.nativeShotCardEnabled]}
-              onPress={toggleNativeScreenshotDetection}
-              activeOpacity={0.82}
-              accessibilityLabel="Toggle native screenshot suggestions"
-            >
-              <View style={styles.nativeShotIcon}>
-                <Ionicons name="scan-outline" size={20} color={colors.text} />
-              </View>
+            <TouchableOpacity style={[styles.nativeShotCard, nativeScreenshotDetection && screenshotMediaAccess && styles.nativeShotCardEnabled]} onPress={toggleNativeScreenshotDetection} activeOpacity={0.82}>
+              <View style={styles.nativeShotIcon}><Ionicons name="scan-outline" size={20} color={colors.text} /></View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.nativeShotTitle}>Screenshot suggestions</Text>
-                <Text style={styles.nativeShotCopy}>
-                  {!bubbleEnabled
-                    ? 'Enable Samhaal access first.'
-                    : nativeScreenshotDetection && screenshotMediaAccess
-                      ? 'On · after a normal screenshot, choose Save to Samhaal or Ignore.'
-                      : nativeScreenshotDetection && !screenshotMediaAccess
-                        ? 'Needs photo access to notice new screenshots.'
-                        : 'Off · ask before saving normal Android screenshots.'}
-                </Text>
+                <Text style={styles.nativeShotCopy}>{!bubbleEnabled ? 'Enable Samhaal access first.' : nativeScreenshotDetection && screenshotMediaAccess ? 'On · after a screenshot, choose Save to Samhaal or Ignore.' : 'Off · ask before saving normal Android screenshots.'}</Text>
               </View>
               <View style={[styles.switchTrack, nativeScreenshotDetection && screenshotMediaAccess && styles.switchTrackOn]}>
                 <View style={[styles.switchKnob, nativeScreenshotDetection && screenshotMediaAccess && styles.switchKnobOn]} />
@@ -388,12 +422,12 @@ export default function DashboardScreen() {
 
             <View style={styles.privacyRow}>
               <Ionicons name="shield-checkmark-outline" size={16} color={colors.textMuted} />
-              <Text style={styles.privacyText}>Raw screenshots stay on your device. OCR runs on-device; only OCR text is sent to Samhaal.</Text>
+              <Text style={styles.privacyText}>Raw screenshots stay on your device. OCR runs on-device; only derived memory text is sent to Samhaal.</Text>
             </View>
 
             <View style={styles.sectionRow}>
               <Text style={styles.sectionTitle}>{memories.length ? 'Your memories' : 'How memories look'}</Text>
-              {memories.length ? <Text style={styles.countText}>{memories.length}</Text> : <Text style={styles.countText}>Preview</Text>}
+              <Text style={styles.countText}>{memories.length ? memories.length : 'Preview'}</Text>
             </View>
           </>
         }
@@ -407,22 +441,12 @@ export default function DashboardScreen() {
         <TouchableOpacity style={styles.accountBackdrop} activeOpacity={1} onPress={() => setAccountVisible(false)}>
           <TouchableOpacity style={styles.accountSheet} activeOpacity={1} onPress={() => {}}>
             <View style={styles.accountHandle} />
-            <View style={styles.accountHeaderRow}>
-              <View style={styles.accountAvatar}>
-                <Ionicons name="person-outline" size={20} color={colors.text} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.accountTitle}>Your account</Text>
-                <Text style={styles.accountEmail} numberOfLines={1}>{accountEmail || 'Signed in to Samhaal'}</Text>
-              </View>
-            </View>
-
+            <Text style={styles.accountTitle}>Your account</Text>
+            <Text style={styles.accountEmail} numberOfLines={1}>{accountEmail || 'Signed in to Samhaal'}</Text>
             <TouchableOpacity style={styles.logoutButton} onPress={confirmLogout} activeOpacity={0.8}>
               <Ionicons name="log-out-outline" size={18} color="#DC2626" />
               <Text style={styles.logoutText}>Log out</Text>
             </TouchableOpacity>
-
-            <Text style={styles.accountHint}>Logging out does not delete your saved memories.</Text>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -447,7 +471,19 @@ const styles = StyleSheet.create({
   title: { fontSize: 34, lineHeight: 39, letterSpacing: -1.2, fontWeight: '700', color: colors.text },
   subtitle: { marginTop: 12, maxWidth: 330, fontSize: 14, lineHeight: 21, color: colors.textMuted },
   profileButton: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.borderSubtle, alignItems: 'center', justifyContent: 'center' },
-  bubbleCard: { marginTop: 26, borderWidth: 1, borderColor: colors.border, borderRadius: 18, padding: 15, flexDirection: 'row', alignItems: 'center', gap: 13, backgroundColor: colors.surface },
+  uploadButton: { marginTop: 24, borderRadius: 16, padding: 15, backgroundColor: colors.black, flexDirection: 'row', gap: 12, alignItems: 'center' },
+  uploadTitle: { color: colors.white, fontSize: 14, fontWeight: '700' },
+  uploadCopy: { color: '#D4D4D8', fontSize: 11.5, marginTop: 3 },
+  queuePanel: { marginTop: 10, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: 14, padding: 12, backgroundColor: colors.surface },
+  queueHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  queueTitle: { fontSize: 13, fontWeight: '700', color: colors.text },
+  queueProgress: { marginTop: 2, fontSize: 11, color: colors.textMuted },
+  queueRow: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 5 },
+  queueName: { flex: 1, fontSize: 11.5, color: colors.textSecondary },
+  queueStatus: { fontSize: 10.5, color: colors.textFaint, textTransform: 'capitalize' },
+  retryText: { fontSize: 11, color: '#DC2626', fontWeight: '700' },
+  queueMore: { fontSize: 10.5, color: colors.textFaint, marginTop: 4 },
+  bubbleCard: { marginTop: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 18, padding: 15, flexDirection: 'row', alignItems: 'center', gap: 13, backgroundColor: colors.surface },
   bubbleCardEnabled: { borderColor: 'rgba(0,0,0,0.18)' },
   bubblePreview: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F4F4F5', alignItems: 'center', justifyContent: 'center' },
   bubblePreviewEnabled: { backgroundColor: colors.black },
@@ -478,6 +514,8 @@ const styles = StyleSheet.create({
   thumbnail: { width: '100%', height: '100%' },
   imageBadge: { position: 'absolute', right: 8, bottom: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(9,9,11,0.78)', alignItems: 'center', justifyContent: 'center' },
   cardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 },
+  cardActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  deleteButton: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F8' },
   intent: { fontSize: 10.5, letterSpacing: 0.7, textTransform: 'uppercase', fontWeight: '700', color: colors.textMuted },
   timeText: { fontSize: 10.5, color: colors.textFaint },
   itemName: { fontSize: 17, lineHeight: 22, letterSpacing: -0.25, fontWeight: '700', color: colors.text },
@@ -486,13 +524,10 @@ const styles = StyleSheet.create({
   accountBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.28)', justifyContent: 'flex-end' },
   accountSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 28 },
   accountHandle: { width: 38, height: 4, borderRadius: 2, backgroundColor: '#D4D4D8', alignSelf: 'center', marginBottom: 18 },
-  accountHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-  accountAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
   accountTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  accountEmail: { marginTop: 3, fontSize: 12.5, color: colors.textMuted },
+  accountEmail: { marginTop: 3, fontSize: 12.5, color: colors.textMuted, marginBottom: 18 },
   logoutButton: { minHeight: 48, borderWidth: 1, borderColor: 'rgba(220,38,38,0.16)', backgroundColor: '#FFF8F8', borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   logoutText: { fontSize: 14, fontWeight: '700', color: '#DC2626' },
-  accountHint: { marginTop: 10, fontSize: 10.5, color: colors.textFaint, textAlign: 'center' },
   imageModalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.94)', alignItems: 'center', justifyContent: 'center' },
   fullImage: { width: '100%', height: '100%' },
   imageClose: { position: 'absolute', top: 48, right: 20, zIndex: 2, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },
