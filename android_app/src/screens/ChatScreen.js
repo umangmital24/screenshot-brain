@@ -11,7 +11,9 @@ import {
   Platform,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { askChat } from '../api'
+import { askChat, fetchMemories } from '../api'
+import { attachLocalMedia } from '../localMemoryMedia'
+import { ensureVisualIndexes } from '../visualIndex'
 import { colors } from '../theme'
 
 const SUGGESTIONS = [
@@ -55,6 +57,17 @@ export default function ChatScreen() {
   const [asking, setAsking] = useState(false)
   const listRef = useRef(null)
 
+  async function prepareVisualSearch() {
+    try {
+      const memoryData = await fetchMemories()
+      const withLocalMedia = await attachLocalMedia(memoryData.memories || [])
+      await ensureVisualIndexes(withLocalMedia, 20)
+    } catch (error) {
+      // Search should still work from OCR/text if visual indexing is unavailable.
+      console.warn('Visual search indexing skipped:', error?.message || error)
+    }
+  }
+
   async function handleAsk(prefilled) {
     const q = (typeof prefilled === 'string' ? prefilled : question).trim()
     if (!q || asking) return
@@ -63,6 +76,11 @@ export default function ChatScreen() {
     setLog((prev) => [...prev, { type: 'user', text: q }])
 
     try {
+      // Existing screenshots may pre-date visual indexing. Build a small private index
+      // from their local image references before asking the backend. This runs on-device;
+      // only derived labels/colors are synchronized, never raw screenshot pixels.
+      await prepareVisualSearch()
+
       const data = await askChat(q)
       setLog((prev) => [
         ...prev,
