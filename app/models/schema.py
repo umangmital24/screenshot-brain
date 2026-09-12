@@ -24,7 +24,7 @@ class VisionExtraction(BaseModel):
 
 class MemoryOut(BaseModel):
     id: str
-    screenshot_id: str
+    screenshot_id: Optional[str] = None
     intent: str
     category: Optional[str] = None
     item_name: str
@@ -78,7 +78,7 @@ class ChatRequest(BaseModel):
 
 class ChatSource(BaseModel):
     memory_id: str
-    screenshot_id: str
+    screenshot_id: Optional[str] = None
     item_name: str
     intent: Optional[str] = None
     category: Optional[str] = None
