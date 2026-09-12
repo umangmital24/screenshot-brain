@@ -11,6 +11,11 @@ import com.facebook.react.jstasks.HeadlessJsTaskConfig
 class UploadHeadlessTaskService : HeadlessJsTaskService() {
 
   companion object {
+    private fun startHeadless(context: Context, intent: Intent) {
+      context.startService(intent)
+      acquireWakeLockNow(context)
+    }
+
     fun enqueueText(
       context: Context,
       extractedText: String,
@@ -27,20 +32,19 @@ class UploadHeadlessTaskService : HeadlessJsTaskService() {
       intent.putExtra("screenshotUri", screenshotUri)
       intent.putExtra("sourceApp", sourceApp)
       intent.putExtra("ocrBlocksJson", ocrBlocksJson)
-      context.startService(intent)
+      startHeadless(context, intent)
     }
 
     fun enqueueSync(context: Context) {
       val intent = Intent(context, UploadHeadlessTaskService::class.java)
       intent.putExtra("syncPending", true)
-      context.startService(intent)
+      startHeadless(context, intent)
     }
 
-    // Compatibility for the older screenshot watcher implementation.
     fun enqueueUpload(context: Context, filePath: String) {
       val intent = Intent(context, UploadHeadlessTaskService::class.java)
       intent.putExtra("filePath", filePath)
-      context.startService(intent)
+      startHeadless(context, intent)
     }
   }
 
