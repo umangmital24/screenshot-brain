@@ -104,10 +104,10 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
 
     if parsed.colors:
         matched_colors = sum(1 for color in parsed.colors if color in visual or color in searchable)
-        score += 0.16 * (matched_colors / len(parsed.colors)) if matched_colors else -0.12
+        score += 0.16 * (matched_colors / len(parsed.colors)) if matched_colors else -0.18
 
     if parsed.intent:
-        score += 0.08 if _text(memory.get("intent")) == parsed.intent.lower() else -0.02
+        score += 0.08 if _text(memory.get("intent")) == parsed.intent.lower() else -0.12
 
     score += 0.03 * _recency_score(memory.get("last_seen"))
     frequency = max(int(memory.get("frequency") or 1), 1)
@@ -116,12 +116,6 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
 
 
 def _has_relevance_evidence(memory: dict, parsed: ParsedAskQuery, score: float) -> bool:
-    """Reject nearest-neighbour results that are not actually relevant.
-
-    Retrieval systems always have a nearest item, so a top-k result alone is not
-    evidence of a match. Require lexical/intent/color evidence, or a genuinely
-    strong vector similarity, before a memory can be surfaced to the user.
-    """
     if score <= 0:
         return False
 
@@ -134,19 +128,25 @@ def _has_relevance_evidence(memory: dict, parsed: ParsedAskQuery, score: float) 
 
     term_hits = sum(1 for term in parsed.terms if _word_match_score(term, searchable) > 0)
     color_hits = sum(1 for color in parsed.colors if color in searchable)
-    intent_hit = bool(parsed.intent and _text(memory.get("intent")) == parsed.intent.lower())
+    intent_matches = not parsed.intent or _text(memory.get("intent")) == parsed.intent.lower()
     vector_similarity = float(memory.get("vector_similarity") or 0.0)
 
-    if parsed.terms and term_hits:
-        return True
-    if parsed.colors and color_hits:
-        return True
-    if intent_hit:
+    # Explicit constraints are gates, not weak ranking hints. If the user asks for
+    # black, don't surface beige; if they ask for jobs, don't surface AI movies.
+    if parsed.colors and color_hits == 0:
+        return False
+    if parsed.intent and not intent_matches:
+        return False
+
+    # Topic terms should have lexical support unless semantic similarity is unusually
+    # strong. This keeps hybrid search useful without allowing nearest-neighbour noise.
+    if parsed.terms:
+        return term_hits > 0 or vector_similarity >= 0.68
+
+    if parsed.colors or parsed.intent:
         return True
 
-    # Semantic-only matches must clear a meaningful similarity bar. This is the
-    # guard that prevents unrelated memories such as movies appearing for "Hi".
-    return vector_similarity >= 0.55
+    return vector_similarity >= 0.68
 
 
 def _merge_candidates(*groups: list[dict]) -> list[dict]:
@@ -245,13 +245,10 @@ def retrieve_memories(user_id: str, parsed: ParsedAskQuery, top_k: int = DEFAULT
     ranked = [(score_memory(memory, parsed), memory) for memory in candidates]
     ranked.sort(key=lambda pair: pair[0], reverse=True)
 
-    # A candidate being in top-k does not make it a match. Keep only candidates
-    # that clear both the score floor and a relevance-evidence check.
-    threshold = 0.18 if parsed.mode == "retrieve" else 0.14
     matches = [
         memory
         for score, memory in ranked
-        if score >= threshold and _has_relevance_evidence(memory, parsed, score)
+        if score >= 0.18 and _has_relevance_evidence(memory, parsed, score)
     ]
     return matches[:top_k]
 
