@@ -11,6 +11,8 @@ import {
   DeviceEventEmitter,
   Image,
   Modal,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
@@ -21,14 +23,29 @@ import { attachLocalMedia } from '../localMemoryMedia'
 import { colors, intentLabel, timeAgo } from '../theme'
 import OverlaySetupGuide from '../components/OverlaySetupGuide'
 import {
+  isNativeScreenshotDetectionEnabled,
   isSaveBubbleEnabled,
   isSaveBubbleSupported,
   isSaveBubbleVisible,
   openAccessibilitySettings,
+  setNativeScreenshotDetectionEnabled,
   showSaveBubble,
 } from '../saveBubble'
 
 const SETUP_SEEN_KEY = 'samhaalSaveBubbleGuideSeen'
+
+function screenshotPermission() {
+  if (Platform.OS !== 'android') return null
+  return Number(Platform.Version) >= 33
+    ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
+    : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE
+}
+
+async function hasScreenshotMediaAccess() {
+  const permission = screenshotPermission()
+  if (!permission) return false
+  return PermissionsAndroid.check(permission)
+}
 
 const SAMPLE_MEMORIES = [
   {
@@ -98,11 +115,22 @@ export default function DashboardScreen() {
   const [bubbleSupported, setBubbleSupported] = useState(false)
   const [bubbleEnabled, setBubbleEnabled] = useState(false)
   const [bubbleVisible, setBubbleVisible] = useState(false)
+  const [nativeScreenshotDetection, setNativeScreenshotDetectionState] = useState(false)
+  const [screenshotMediaAccess, setScreenshotMediaAccess] = useState(false)
   const [setupGuideVisible, setSetupGuideVisible] = useState(false)
   const [previewImageUri, setPreviewImageUri] = useState(null)
   const [accountVisible, setAccountVisible] = useState(false)
   const [accountEmail, setAccountEmail] = useState('')
   const awaitingSettingsReturn = useRef(false)
+
+  const refreshNativeScreenshotState = useCallback(async () => {
+    const [enabled, access] = await Promise.all([
+      isNativeScreenshotDetectionEnabled(),
+      hasScreenshotMediaAccess(),
+    ])
+    setNativeScreenshotDetectionState(enabled)
+    setScreenshotMediaAccess(access)
+  }, [])
 
   const refreshBubbleState = useCallback(async (allowAutoGuide = false) => {
     const supported = await isSaveBubbleSupported()
@@ -120,7 +148,8 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     refreshBubbleState(true)
-  }, [refreshBubbleState])
+    refreshNativeScreenshotState()
+  }, [refreshBubbleState, refreshNativeScreenshotState])
 
   const load = useCallback(async (showFullLoader = true) => {
     if (showFullLoader) setLoading(true)
@@ -144,13 +173,15 @@ export default function DashboardScreen() {
     setRefreshing(true)
     load(false)
     refreshBubbleState(false)
-  }, [load, refreshBubbleState])
+    refreshNativeScreenshotState()
+  }, [load, refreshBubbleState, refreshNativeScreenshotState])
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (state) => {
       if (state !== 'active') return
       load(false)
       await refreshBubbleState(false)
+      await refreshNativeScreenshotState()
       if (awaitingSettingsReturn.current) {
         awaitingSettingsReturn.current = false
         const enabled = await isSaveBubbleEnabled()
@@ -158,7 +189,7 @@ export default function DashboardScreen() {
       }
     })
     return () => sub.remove()
-  }, [load, refreshBubbleState])
+  }, [load, refreshBubbleState, refreshNativeScreenshotState])
 
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener('memoriesUpdated', () => {
@@ -171,8 +202,9 @@ export default function DashboardScreen() {
     useCallback(() => {
       load(memories.length === 0)
       refreshBubbleState(false)
+      refreshNativeScreenshotState()
       return undefined
-    }, [load, refreshBubbleState, memories.length])
+    }, [load, refreshBubbleState, refreshNativeScreenshotState, memories.length])
   )
 
   async function handleBubbleCardPress() {
@@ -187,6 +219,53 @@ export default function DashboardScreen() {
       return
     }
     setSetupGuideVisible(true)
+  }
+
+  async function toggleNativeScreenshotDetection() {
+    if (!bubbleSupported) return
+
+    if (nativeScreenshotDetection) {
+      setNativeScreenshotDetectionEnabled(false)
+      setNativeScreenshotDetectionState(false)
+      return
+    }
+
+    if (!bubbleEnabled) {
+      Alert.alert(
+        'Enable Samhaal access first',
+        'Screenshot suggestions use the same Android Accessibility service as the Save Bubble. Enable it once, then turn this option on.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open setup', onPress: () => setSetupGuideVisible(true) },
+        ],
+      )
+      return
+    }
+
+    let access = screenshotMediaAccess || await hasScreenshotMediaAccess()
+    if (!access) {
+      const permission = screenshotPermission()
+      if (!permission) return
+      const result = await PermissionsAndroid.request(permission, {
+        title: 'Allow screenshot suggestions',
+        message: 'Samhaal needs photo access only to notice newly created screenshots. It does not read screenshot pixels unless you tap Save to Samhaal.',
+        buttonPositive: 'Allow',
+        buttonNegative: 'Not now',
+      })
+      access = result === PermissionsAndroid.RESULTS.GRANTED
+      setScreenshotMediaAccess(access)
+    }
+
+    if (!access) {
+      Alert.alert(
+        'Photo access is required',
+        'To notice normal Android screenshots, Samhaal needs access to images. You can keep using the Save Bubble without this permission.',
+      )
+      return
+    }
+
+    setNativeScreenshotDetectionEnabled(true)
+    setNativeScreenshotDetectionState(true)
   }
 
   async function continueToSettings() {
@@ -281,9 +360,35 @@ export default function DashboardScreen() {
               {bubbleSupported ? <Ionicons name="chevron-forward" size={17} color={colors.textFaint} /> : null}
             </TouchableOpacity>
 
+            <TouchableOpacity
+              style={[styles.nativeShotCard, nativeScreenshotDetection && screenshotMediaAccess && styles.nativeShotCardEnabled]}
+              onPress={toggleNativeScreenshotDetection}
+              activeOpacity={0.82}
+              accessibilityLabel="Toggle native screenshot suggestions"
+            >
+              <View style={styles.nativeShotIcon}>
+                <Ionicons name="scan-outline" size={20} color={colors.text} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.nativeShotTitle}>Screenshot suggestions</Text>
+                <Text style={styles.nativeShotCopy}>
+                  {!bubbleEnabled
+                    ? 'Enable Samhaal access first.'
+                    : nativeScreenshotDetection && screenshotMediaAccess
+                      ? 'On · after a normal screenshot, choose Save to Samhaal or Ignore.'
+                      : nativeScreenshotDetection && !screenshotMediaAccess
+                        ? 'Needs photo access to notice new screenshots.'
+                        : 'Off · ask before saving normal Android screenshots.'}
+                </Text>
+              </View>
+              <View style={[styles.switchTrack, nativeScreenshotDetection && screenshotMediaAccess && styles.switchTrackOn]}>
+                <View style={[styles.switchKnob, nativeScreenshotDetection && screenshotMediaAccess && styles.switchKnobOn]} />
+              </View>
+            </TouchableOpacity>
+
             <View style={styles.privacyRow}>
               <Ionicons name="shield-checkmark-outline" size={16} color={colors.textMuted} />
-              <Text style={styles.privacyText}>A private screenshot reference stays on this device. Only OCR text is sent to Samhaal.</Text>
+              <Text style={styles.privacyText}>Raw screenshots stay on your device. OCR runs on-device; only OCR text is sent to Samhaal.</Text>
             </View>
 
             <View style={styles.sectionRow}>
@@ -353,6 +458,15 @@ const styles = StyleSheet.create({
   statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D4D4D8' },
   statusDotEnabled: { backgroundColor: '#22C55E' },
   bubbleCopy: { fontSize: 12.5, color: colors.textMuted, lineHeight: 18, marginTop: 4 },
+  nativeShotCard: { marginTop: 10, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface },
+  nativeShotCardEnabled: { borderColor: 'rgba(0,0,0,0.18)' },
+  nativeShotIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
+  nativeShotTitle: { fontSize: 13.5, color: colors.text, fontWeight: '700' },
+  nativeShotCopy: { marginTop: 3, fontSize: 11.5, lineHeight: 16, color: colors.textMuted },
+  switchTrack: { width: 38, height: 22, borderRadius: 11, backgroundColor: '#E4E4E7', padding: 3, justifyContent: 'center' },
+  switchTrackOn: { backgroundColor: colors.black },
+  switchKnob: { width: 16, height: 16, borderRadius: 8, backgroundColor: colors.white },
+  switchKnobOn: { alignSelf: 'flex-end' },
   privacyRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 13, paddingHorizontal: 2 },
   privacyText: { flex: 1, fontSize: 11.5, lineHeight: 17, color: colors.textFaint },
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 34, marginBottom: 12 },
