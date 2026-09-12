@@ -4,7 +4,7 @@ import { saveLocalScreenshotReferences } from './localMemoryMedia'
 import { enqueuePendingCapture, isRetryableCaptureError } from './pendingCaptureQueue'
 import { supabase } from './supabaseClient'
 
-const { SaveBubble } = NativeModules
+const { SaveBubble, OnDeviceOcr } = NativeModules
 
 function reportDebugStage(message) {
   try {
@@ -40,10 +40,22 @@ function parseBlocks(raw) {
   }
 }
 
+async function deriveVisualContext(screenshotUri) {
+  if (!screenshotUri || typeof OnDeviceOcr?.analyzeVisual !== 'function') return ''
+  try {
+    reportDebugStage('Building private visual index on device')
+    const context = await OnDeviceOcr.analyzeVisual(screenshotUri)
+    return String(context || '').trim().slice(0, 2000)
+  } catch (error) {
+    reportDebugStage(`Visual indexing skipped: ${error?.message || 'unavailable'}`)
+    return ''
+  }
+}
+
 /**
- * Headless bridge used by the Android Save Bubble.
- * Raw screenshot pixels stay on-device. Only OCR text, OCR geometry, source-app
- * context and capture metadata are sent to the Samhaal capture pipeline.
+ * Headless bridge used by Android screenshot capture flows.
+ * Raw screenshot pixels stay on-device. OCR and visual indexing run locally. Only
+ * OCR text, geometry, derived labels/colors, source-app context and metadata go upstream.
  */
 export default async function uploadScreenshotTask(data) {
   const extractedText = data?.extractedText
@@ -57,9 +69,8 @@ export default async function uploadScreenshotTask(data) {
 
   reportDebugStage('JS headless task running')
 
-  // A Save Bubble tap should feel instant. Once native capture + on-device OCR hand
-  // the job to this headless task, release the bubble immediately. Upload, backend
-  // classification and memory creation continue independently in the background.
+  // Release the bubble immediately. Upload, classification and visual indexing continue
+  // independently in the background.
   reportBubblePending('Captured. Samhaal will finish this memory in the background.')
 
   reportDebugStage('Checking signed-in session')
@@ -82,11 +93,14 @@ export default async function uploadScreenshotTask(data) {
 
   try {
     if (extractedText) {
+      const visualContext = await deriveVisualContext(screenshotUri)
+
       reportDebugStage('POST /captures')
       const queued = await createCapture(extractedText, sourceApp, {
         clientEventId,
         capturedAt,
         ocrBlocks,
+        entities: visualContext ? { visual_context: visualContext } : {},
       })
       queuedCaptureId = queued.capture_id
       reportDebugStage(`Capture queued: ${String(queuedCaptureId).slice(0, 8)}`)
@@ -102,6 +116,7 @@ export default async function uploadScreenshotTask(data) {
           screenshotUri,
           sourceApp,
           ocrBlocks,
+          entities: visualContext ? { visual_context: visualContext } : {},
           captureId: queuedCaptureId,
           lastStatus: result.status,
         })
