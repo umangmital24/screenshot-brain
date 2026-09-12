@@ -8,10 +8,7 @@ const DEFAULT_WAIT_MS = 45000
 async function authHeaders(extra = {}) {
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
-  return {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...extra,
-  }
+  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extra }
 }
 
 function requireApiBase() {
@@ -27,11 +24,7 @@ function apiError(message, status = null, data = null) {
 
 async function readJson(res) {
   const text = await res.text()
-  try {
-    return text ? JSON.parse(text) : {}
-  } catch {
-    return { detail: text }
-  }
+  try { return text ? JSON.parse(text) : {} } catch { return { detail: text } }
 }
 
 function randomUuid() {
@@ -42,9 +35,7 @@ function randomUuid() {
   })
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
+function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)) }
 
 export async function fetchMemories(intent) {
   requireApiBase()
@@ -55,16 +46,22 @@ export async function fetchMemories(intent) {
   return res.json()
 }
 
+export async function deleteMemory(memoryId) {
+  requireApiBase()
+  const headers = await authHeaders()
+  const res = await fetch(`${API_BASE}/memories/${encodeURIComponent(memoryId)}`, { method: 'DELETE', headers })
+  const data = await readJson(res)
+  if (!res.ok) throw apiError(data.detail || 'Could not delete memory', res.status, data)
+  return data
+}
+
 export async function updateMemoryVisualContext(memoryId, visualContext) {
   requireApiBase()
   const clean = String(visualContext || '').trim()
   if (!memoryId || !clean) return null
-
   const headers = await authHeaders({ 'Content-Type': 'application/json' })
   const res = await fetch(`${API_BASE}/memories/${encodeURIComponent(memoryId)}`, {
-    method: 'PATCH',
-    headers,
-    body: JSON.stringify({ visual_context: clean.slice(0, 2000) }),
+    method: 'PATCH', headers, body: JSON.stringify({ visual_context: clean.slice(0, 2000) }),
   })
   const data = await readJson(res)
   if (!res.ok) throw apiError(data.detail || 'Could not update visual index', res.status, data)
@@ -79,15 +76,10 @@ export async function fetchSummary() {
   return res.json()
 }
 
-export async function createCapture(
-  extractedText,
-  appSource = 'android_save_bubble',
-  captureMeta = {},
-) {
+export async function createCapture(extractedText, appSource = 'android_save_bubble', captureMeta = {}) {
   requireApiBase()
   const cleanText = String(extractedText || '').trim()
   if (!cleanText) throw new Error('No readable text was found on this screen.')
-
   const clientEventId = captureMeta.clientEventId || randomUuid()
   const headers = await authHeaders({ 'Content-Type': 'application/json' })
   const body = {
@@ -99,14 +91,8 @@ export async function createCapture(
     ocr_blocks: Array.isArray(captureMeta.ocrBlocks) ? captureMeta.ocrBlocks : [],
     captured_at: captureMeta.capturedAt || new Date().toISOString(),
   }
-
   if (captureMeta.screenshotId) body.screenshot_id = captureMeta.screenshotId
-
-  const res = await fetch(`${API_BASE}/captures`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  })
+  const res = await fetch(`${API_BASE}/captures`, { method: 'POST', headers, body: JSON.stringify(body) })
   const data = await readJson(res)
   if (!res.ok) throw apiError(data.detail || 'Could not queue this screen', res.status, data)
   return data
@@ -124,10 +110,7 @@ export async function getCapture(captureId) {
 export async function retryCapture(captureId) {
   requireApiBase()
   const headers = await authHeaders({ 'Content-Type': 'application/json' })
-  const res = await fetch(`${API_BASE}/captures/${encodeURIComponent(captureId)}/retry`, {
-    method: 'POST',
-    headers,
-  })
+  const res = await fetch(`${API_BASE}/captures/${encodeURIComponent(captureId)}/retry`, { method: 'POST', headers })
   const data = await readJson(res)
   if (!res.ok) throw apiError(data.detail || 'Could not retry capture', res.status, data)
   return data
@@ -138,47 +121,27 @@ export async function waitForCapture(captureId, options = {}) {
   const pollMs = Number(options.pollMs || DEFAULT_POLL_MS)
   const startedAt = Date.now()
   let latest = await getCapture(captureId)
-
   while (Date.now() - startedAt < timeoutMs) {
     if (latest.status === 'completed') return latest
-    if (latest.status === 'failed_permanent') {
-      throw apiError(latest.last_error || 'This memory could not be processed.', 422, latest)
-    }
+    if (latest.status === 'failed_permanent') throw apiError(latest.last_error || 'This memory could not be processed.', 422, latest)
     await sleep(pollMs)
     latest = await getCapture(captureId)
   }
-
   return latest
 }
 
-export async function saveExtractedText(
-  extractedText,
-  appSource = 'android_save_bubble',
-  captureMeta = {},
-) {
+export async function saveExtractedText(extractedText, appSource = 'android_save_bubble', captureMeta = {}) {
   const queued = captureMeta.captureId
     ? { capture_id: captureMeta.captureId, client_event_id: captureMeta.clientEventId }
     : await createCapture(extractedText, appSource, captureMeta)
-
-  const result = await waitForCapture(queued.capture_id, {
-    timeoutMs: captureMeta.timeoutMs,
-    pollMs: captureMeta.pollMs,
-  })
-
-  return {
-    ...result,
-    capture_id: queued.capture_id,
-    client_event_id: queued.client_event_id || result.client_event_id,
-  }
+  const result = await waitForCapture(queued.capture_id, { timeoutMs: captureMeta.timeoutMs, pollMs: captureMeta.pollMs })
+  return { ...result, capture_id: queued.capture_id, client_event_id: queued.client_event_id || result.client_event_id }
 }
 
-/**
- * Manual/share-sheet privacy path. OCR happens locally; only OCR text leaves the device.
- */
 export async function uploadScreenshot(imageAsset) {
   const uri = imageAsset?.uri
   const extractedText = await recognizeScreenshotText(uri)
-  return saveExtractedText(extractedText, imageAsset?.appSource || 'android_mlkit', {
+  return saveExtractedText(extractedText, imageAsset?.appSource || 'android_gallery_upload', {
     clientEventId: imageAsset?.clientEventId || randomUuid(),
     capturedAt: imageAsset?.capturedAt || new Date().toISOString(),
   })
@@ -188,17 +151,13 @@ export async function askChat(question, history = []) {
   requireApiBase()
   const headers = await authHeaders({ 'Content-Type': 'application/json' })
   const cleanHistory = Array.isArray(history)
-    ? history
-        .filter((turn) => turn && (turn.role === 'user' || turn.role === 'assistant') && String(turn.text || '').trim())
-        .slice(-10)
-        .map((turn) => ({ role: turn.role, text: String(turn.text).trim().slice(0, 1500) }))
+    ? history.filter((turn) => turn && (turn.role === 'user' || turn.role === 'assistant') && String(turn.text || '').trim())
+      .slice(-10).map((turn) => ({ role: turn.role, text: String(turn.text).trim().slice(0, 1500) }))
     : []
   const res = await fetch(`${API_BASE}/chat`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ question, client_request_id: randomUuid(), history: cleanHistory }),
+    method: 'POST', headers, body: JSON.stringify({ question, client_request_id: randomUuid(), history: cleanHistory }),
   })
   const data = await readJson(res)
-  if (!res.ok) throw apiError(data.detail || 'Chat failed', res.status, data)
+  if (!res.ok) throw apiError(data.detail || 'Search failed', res.status, data)
   return data
 }
