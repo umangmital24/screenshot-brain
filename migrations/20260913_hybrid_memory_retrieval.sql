@@ -1,7 +1,7 @@
 -- Model-free hybrid retrieval for Ask Samhaal.
 -- Combines PostgreSQL full-text search with trigram fuzziness and keeps user isolation server-side.
 
-create extension if not exists pg_trgm;
+create extension if not exists pg_trgm with schema extensions;
 
 alter table public.memories
   add column if not exists search_text text
@@ -16,7 +16,7 @@ alter table public.memories
   ) stored;
 
 create index if not exists idx_memories_search_text_trgm
-  on public.memories using gin(search_text gin_trgm_ops);
+  on public.memories using gin(search_text extensions.gin_trgm_ops);
 
 create or replace function public.search_memories_hybrid(
   p_user_id uuid,
@@ -40,13 +40,13 @@ as $$
     and p.q <> ''
     and (
       m.search_document @@ p.tsq
-      or m.search_text % p.q
+      or m.search_text OPERATOR(extensions.%) p.q
       or m.search_text like ('%' || p.q || '%')
     )
   order by
     (
       0.72 * ts_rank_cd(m.search_document, p.tsq)
-      + 0.28 * similarity(m.search_text, p.q)
+      + 0.28 * extensions.similarity(m.search_text, p.q)
     ) desc,
     m.last_seen desc
   limit least(greatest(p_limit, 1), 250);
