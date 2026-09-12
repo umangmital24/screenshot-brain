@@ -42,8 +42,11 @@ object PendingSyncScheduler {
     )
   }
 
+  // One-time work is scheduled immediately whenever a capture enters the local outbox.
+  // This low-frequency repair sweep handles edge cases such as process death without
+  // waking the app every 15 minutes all day.
   fun ensurePeriodic(context: Context) {
-    val request = PeriodicWorkRequestBuilder<PendingSyncWorker>(15, TimeUnit.MINUTES)
+    val request = PeriodicWorkRequestBuilder<PendingSyncWorker>(6, TimeUnit.HOURS)
       .setConstraints(networkConstraints())
       .build()
     WorkManager.getInstance(context).enqueueUniquePeriodicWork(
