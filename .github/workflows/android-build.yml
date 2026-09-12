@@ -45,6 +45,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Ensure Hermes compiler is executable
+        run: |
+          test -f node_modules/hermes-compiler/hermesc/linux64-bin
+          chmod +x node_modules/hermes-compiler/hermesc/linux64-bin
+          test -x node_modules/hermes-compiler/hermesc/linux64-bin
+
       - name: Expo config sanity check
         run: npx expo config --type public >/tmp/expo-config.json
 
