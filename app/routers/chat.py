@@ -3,6 +3,7 @@ import json
 import asyncio
 import logging
 from google import genai
+from google.genai import types
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.services.db import get_client, get_signed_screenshot_url
@@ -11,12 +12,15 @@ from app.services.entitlements import enforce_monthly_limit
 from app.services.query_parser import parse_ask_query
 from app.services.retrieval import retrieve_memories, compose_retrieval_answer
 from app.services.vision import gemini_error_details
+from app.services.distributed_limiter import allow_request
 from app.models.schema import ChatRequest, ChatResponse, ChatSource
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
 _client: genai.Client | None = None
 _GEMINI_CONCURRENCY = max(int(os.environ.get("GEMINI_CHAT_CONCURRENCY", "3")), 1)
+_REASONING_RPM = max(int(os.environ.get("ASK_REASONING_RPM", "6")), 1)
+_CHAT_THINKING_BUDGET = int(os.environ.get("GEMINI_CHAT_THINKING_BUDGET", "512"))
 _gemini_slots = asyncio.Semaphore(_GEMINI_CONCURRENCY)
 
 
@@ -153,6 +157,10 @@ async def _generate_reasoned_answer(req: ChatRequest, memories: list[dict]):
     )
 
     model = os.environ.get("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
+    config = types.GenerateContentConfig(
+        temperature=0.2,
+        thinking_config=types.ThinkingConfig(thinking_budget=_CHAT_THINKING_BUDGET),
+    )
     last_error = None
     async with _gemini_slots:
         for attempt in range(3):
@@ -160,7 +168,11 @@ async def _generate_reasoned_answer(req: ChatRequest, memories: list[dict]):
                 gemini_client = _get_client()
 
                 def _generate():
-                    return gemini_client.models.generate_content(model=model, contents=[prompt, req.question])
+                    return gemini_client.models.generate_content(
+                        model=model,
+                        contents=[prompt, req.question],
+                        config=config,
+                    )
 
                 response = await asyncio.to_thread(_generate)
                 raw_text = response.text or ""
@@ -178,7 +190,7 @@ async def _generate_reasoned_answer(req: ChatRequest, memories: list[dict]):
                 logger.warning("Ask Gemini attempt %d failed | retryable=%s | %s", attempt + 1, retryable, detail)
                 if not retryable or attempt == 2:
                     break
-                await asyncio.sleep(1.5 * (2 ** attempt))
+                await asyncio.sleep(2.0 * (2 ** attempt))
 
     raise last_error or RuntimeError("Gemini generation failed")
 
@@ -232,11 +244,22 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
         })
         return ChatResponse(answer="I couldn't find enough saved information to answer that.", memories_used=0, sources=[])
 
+    reasoning_allowed, retry_after = await allow_request("ask_reasoning", user_id, _REASONING_RPM, 60)
+    if not reasoning_allowed:
+        fallback = compose_retrieval_answer(parsed, memories)
+        sources = await _build_sources(client, user_id, memories)
+        await asyncio.to_thread(_record_usage, client, req, user_id, {
+            "mode": "reasoning_rate_limited",
+            "model": None,
+            "retrieved_count": len(memories),
+            "retry_after_seconds": retry_after,
+        })
+        return ChatResponse(answer=fallback, memories_used=len(memories), sources=sources)
+
     try:
         answer, used_memories, model, token_usage = await _generate_reasoned_answer(req, memories)
     except Exception:
         logger.exception("Gemini reasoning generation failed")
-        # Graceful degradation: quota exhaustion should not make Ask completely unusable.
         fallback = compose_retrieval_answer(parsed, memories)
         sources = await _build_sources(client, user_id, memories)
         await asyncio.to_thread(_record_usage, client, req, user_id, {
