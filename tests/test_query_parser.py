@@ -36,6 +36,16 @@ class QueryParserTests(unittest.TestCase):
         self.assertIsNone(parsed.before_days)
         self.assertEqual(parsed.intent, "VISIT_LATER")
 
+    def test_show_command_does_not_imply_watch(self):
+        parsed = parse_ask_query("show my saved laptops")
+        self.assertEqual(parsed.intent, "BUY_LATER")
+        self.assertEqual(parsed.mode, "retrieve")
+
+    def test_tv_show_plural_still_maps_to_watch(self):
+        parsed = parse_ask_query("find the shows I saved")
+        self.assertEqual(parsed.intent, "WATCH_LATER")
+        self.assertEqual(parsed.mode, "retrieve")
+
 
 if __name__ == "__main__":
     unittest.main()
