@@ -17,7 +17,9 @@ COLORS = {
 
 INTENT_HINTS = {
     "READ_LATER": {"book", "books", "article", "articles", "read", "reading"},
-    "WATCH_LATER": {"movie", "movies", "film", "films", "series", "show", "shows", "watch", "reel", "video"},
+    # "show" is intentionally excluded: it is commonly a search command ("show me shoes"),
+    # while "shows" remains useful for TV/streaming memories.
+    "WATCH_LATER": {"movie", "movies", "film", "films", "series", "shows", "watch", "reel", "video", "videos"},
     "BUY_LATER": {"buy", "product", "products", "shoe", "shoes", "shirt", "shirts", "jacket", "jackets", "laptop", "phone"},
     "COOK_LATER": {"recipe", "recipes", "cook", "cooking", "dish", "food"},
     "VISIT_LATER": {"restaurant", "restaurants", "cafe", "cafes", "place", "places", "visit", "travel", "hotel", "hotels"},
