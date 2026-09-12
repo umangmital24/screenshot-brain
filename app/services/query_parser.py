@@ -7,8 +7,6 @@ REASONING_TERMS = {
     "compare", "comparison", "summarize", "summary", "recommend", "recommendation",
     "best", "better", "worse", "why", "explain", "choose", "pick", "rank", "ranking",
     "pros", "cons", "difference", "differences", "similarities", "should i", "which is better",
-    # Referential follow-ups need conversation-aware resolution. They remain a small
-    # Gemini fallback instead of making every ordinary search generative.
     "which one", "what about", "first one", "second one", "third one", "the first", "the second", "the third",
 }
 
@@ -30,8 +28,11 @@ INTENT_HINTS = {
 
 STOPWORDS = {
     "a", "about", "an", "and", "are", "as", "at", "be", "did", "do", "for", "from", "i", "in", "is",
-    "it", "me", "my", "of", "on", "one", "or", "please", "saved", "samhaal", "show", "that", "the",
+    "it", "me", "my", "of", "on", "one", "or", "please", "save", "saved", "samhaal", "show", "that", "the",
     "this", "to", "was", "what", "where", "which", "with", "you", "find", "memory", "memories",
+    "compare", "comparison", "summarize", "summary", "recommend", "recommendation", "best", "better", "worse",
+    "why", "explain", "choose", "pick", "rank", "ranking", "first", "second", "third", "two",
+    "today", "yesterday", "week", "month", "last",
 }
 
 
@@ -42,6 +43,8 @@ class ParsedAskQuery:
     terms: tuple[str, ...]
     colors: tuple[str, ...]
     intent: str | None
+    since_days: int | None = None
+    before_days: int | None = None
 
 
 def _tokens(text: str) -> list[str]:
@@ -72,12 +75,30 @@ def _detect_intent(tokens: list[str]) -> str | None:
     return best_intent
 
 
+def _detect_time_window(text: str) -> tuple[int | None, int | None]:
+    normalized = " ".join(_tokens(text))
+    if "yesterday" in normalized:
+        return 2, 1
+    if "today" in normalized:
+        return 1, None
+    if "last week" in normalized:
+        return 14, 7
+    if "this week" in normalized or "last 7 days" in normalized:
+        return 7, None
+    if "last month" in normalized:
+        return 60, 30
+    if "this month" in normalized or "last 30 days" in normalized:
+        return 30, None
+    return None, None
+
+
 def parse_ask_query(question: str) -> ParsedAskQuery:
     raw = (question or "").strip()
     tokens = _tokens(raw)
     lowered = raw.lower()
     colors = tuple(sorted({color for color in COLORS if color in lowered}))
     color_tokens = {part for color in colors for part in color.split()}
+    since_days, before_days = _detect_time_window(raw)
 
     terms = []
     for token in tokens:
@@ -92,4 +113,6 @@ def parse_ask_query(question: str) -> ParsedAskQuery:
         terms=tuple(terms[:12]),
         colors=colors,
         intent=_detect_intent(tokens),
+        since_days=since_days,
+        before_days=before_days,
     )
