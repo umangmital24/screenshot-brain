@@ -57,6 +57,7 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
   private var bubbleParams: WindowManager.LayoutParams? = null
   private var removeTarget: TextView? = null
   private var removeTargetParams: WindowManager.LayoutParams? = null
+  private var nativeScreenshotWatcher: NativeScreenshotWatcher? = null
   private val mainHandler = Handler(Looper.getMainLooper())
   private var busy = false
   private var foregroundPackage: String? = null
@@ -67,9 +68,12 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     current = this
     windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
     if (!isHiddenByUser()) showBubble()
+    nativeScreenshotWatcher = NativeScreenshotWatcher(this).also { it.startIfEnabled() }
   }
 
   override fun onDestroy() {
+    nativeScreenshotWatcher?.stopWatching()
+    nativeScreenshotWatcher = null
     removeBubble(false)
     hideRemoveTarget()
     isConnected = false
@@ -79,7 +83,7 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
 
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
     val pkg = event?.packageName?.toString()?.trim()
-    if (!pkg.isNullOrBlank() && pkg != packageName) {
+    if (!pkg.isNullOrBlank() && pkg != packageName && pkg != "com.android.systemui") {
       foregroundPackage = pkg
     }
   }
@@ -95,6 +99,15 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     prefs().edit().putBoolean(KEY_HIDDEN, false).apply()
     showBubble()
   }
+
+  fun refreshNativeScreenshotDetection() {
+    if (nativeScreenshotWatcher == null) {
+      nativeScreenshotWatcher = NativeScreenshotWatcher(this)
+    }
+    nativeScreenshotWatcher?.refresh()
+  }
+
+  fun currentForegroundSourceForScreenshot(): String = sourceAppLabel(foregroundPackage)
 
   fun reportDebugStage(message: String?) {
     if (!message.isNullOrBlank()) debugLog(message)
