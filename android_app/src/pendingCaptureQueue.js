@@ -1,38 +1,64 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { DeviceEventEmitter } from 'react-native'
+import { DeviceEventEmitter, NativeModules } from 'react-native'
 import { createCapture, getCapture, waitForCapture } from './api'
 import { saveLocalScreenshotReferences } from './localMemoryMedia'
 import { supabase } from './supabaseClient'
 
-const KEY = 'samhaalPendingCaptureQueueV2'
-const LEGACY_KEY = 'samhaalPendingCaptureQueueV1'
-const MAX_PENDING = 50
+const { LocalStore, SyncScheduler } = NativeModules
+const LEGACY_KEYS = ['samhaalPendingCaptureQueueV2', 'samhaalPendingCaptureQueueV1']
 let flushing = false
+let migrated = false
 
-async function readStored(key) {
+async function migrateLegacyQueue() {
+  if (migrated || !LocalStore?.upsertPendingCapture) return
+  migrated = true
+
+  for (const key of LEGACY_KEYS) {
+    try {
+      const raw = await AsyncStorage.getItem(key)
+      const parsed = raw ? JSON.parse(raw) : []
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (!item?.clientEventId || !item?.extractedText) continue
+          await LocalStore.upsertPendingCapture(item.clientEventId, JSON.stringify(item))
+        }
+      }
+      await AsyncStorage.removeItem(key)
+    } catch {
+      // Legacy migration is best-effort; SQLite remains the authoritative store.
+    }
+  }
+}
+
+async function readQueue() {
+  await migrateLegacyQueue()
+  if (!LocalStore?.getPendingCaptures) return []
   try {
-    const raw = await AsyncStorage.getItem(key)
-    const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed : []
+    const rows = await LocalStore.getPendingCaptures()
+    return (rows || []).map((raw) => {
+      try { return JSON.parse(raw) } catch { return null }
+    }).filter(Boolean)
   } catch {
     return []
   }
 }
 
-async function readQueue() {
-  const current = await readStored(KEY)
-  if (current.length) return current
-
-  const legacy = await readStored(LEGACY_KEY)
-  if (!legacy.length) return []
-
-  await writeQueue(legacy)
-  await AsyncStorage.removeItem(LEGACY_KEY).catch(() => {})
-  return legacy
+async function saveQueueItem(item) {
+  if (!item?.clientEventId || !LocalStore?.upsertPendingCapture) return
+  await LocalStore.upsertPendingCapture(item.clientEventId, JSON.stringify(item))
 }
 
-async function writeQueue(items) {
-  await AsyncStorage.setItem(KEY, JSON.stringify(items.slice(-MAX_PENDING)))
+async function deleteQueueItem(clientEventId) {
+  if (!clientEventId || !LocalStore?.deletePendingCapture) return
+  await LocalStore.deletePendingCapture(clientEventId)
+}
+
+function scheduleBackgroundSync() {
+  try {
+    SyncScheduler?.schedulePendingSync?.()
+  } catch {
+    // Foreground/app-launch flush remains as a fallback.
+  }
 }
 
 export function isRetryableCaptureError(error) {
@@ -43,18 +69,15 @@ export function isRetryableCaptureError(error) {
 
 export async function enqueuePendingCapture(capture) {
   if (!capture?.clientEventId || !capture?.extractedText) return
-  const queue = await readQueue()
-  const existingIndex = queue.findIndex((item) => item.clientEventId === capture.clientEventId)
+  const existing = (await readQueue()).find((item) => item.clientEventId === capture.clientEventId)
   const next = {
+    ...existing,
     ...capture,
-    queuedAt: capture.queuedAt || new Date().toISOString(),
-    attempts: capture.attempts || 0,
+    queuedAt: capture.queuedAt || existing?.queuedAt || new Date().toISOString(),
+    attempts: capture.attempts ?? existing?.attempts ?? 0,
   }
-
-  if (existingIndex >= 0) queue[existingIndex] = { ...queue[existingIndex], ...next }
-  else queue.push(next)
-
-  await writeQueue(queue)
+  await saveQueueItem(next)
+  scheduleBackgroundSync()
 }
 
 async function ensureCapture(item) {
@@ -82,7 +105,6 @@ async function ensureCapture(item) {
 
 async function syncItem(item) {
   const { captureId, current } = await ensureCapture(item)
-
   if (current?.status === 'completed') return { done: true, result: current, captureId }
   if (current?.status === 'failed_permanent') {
     const error = new Error(current.last_error || 'Capture failed permanently')
@@ -105,14 +127,15 @@ export async function flushPendingCaptures() {
     const queue = await readQueue()
     if (!queue.length) return { synced: 0, pending: 0 }
 
-    const remaining = []
     let synced = 0
+    let pending = 0
 
     for (const item of queue) {
       try {
         const { done, result, captureId } = await syncItem(item)
         if (!done) {
-          remaining.push({
+          pending += 1
+          await saveQueueItem({
             ...item,
             captureId,
             attempts: (item.attempts || 0) + 1,
@@ -122,10 +145,15 @@ export async function flushPendingCaptures() {
         }
 
         await saveLocalScreenshotReferences(result.memories || [], item.screenshotUri, null)
+        await deleteQueueItem(item.clientEventId)
         synced += 1
       } catch (error) {
-        if (Number(error?.status || 0) === 422) continue
-        remaining.push({
+        if (Number(error?.status || 0) === 422) {
+          await deleteQueueItem(item.clientEventId)
+          continue
+        }
+        pending += 1
+        await saveQueueItem({
           ...item,
           attempts: (item.attempts || 0) + 1,
           lastError: error?.message || 'Sync failed',
@@ -133,9 +161,9 @@ export async function flushPendingCaptures() {
       }
     }
 
-    await writeQueue(remaining)
+    if (pending > 0) scheduleBackgroundSync()
     if (synced > 0) DeviceEventEmitter.emit('memoriesUpdated')
-    return { synced, pending: remaining.length }
+    return { synced, pending }
   } finally {
     flushing = false
   }
