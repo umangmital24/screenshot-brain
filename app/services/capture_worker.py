@@ -14,7 +14,7 @@ from app.services.vision import extract_intent_from_metadata, gemini_error_detai
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "v3-primary-target-geometry"
+PROMPT_VERSION = "v4-visual-context"
 SCHEMA_VERSION = "capture-extraction-v1"
 MAX_ATTEMPTS = int(os.environ.get("CAPTURE_MAX_ATTEMPTS", "5"))
 BASE_RETRY_SECONDS = int(os.environ.get("CAPTURE_RETRY_BASE_SECONDS", "15"))
@@ -62,7 +62,6 @@ def _record_extraction(
 
 
 def _heartbeat_loop(stop_event: threading.Event, job_id: str, worker_id: str) -> None:
-    """Renew the DB lease while a capture is being processed."""
     client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 
     while not stop_event.wait(HEARTBEAT_SECONDS):
@@ -79,11 +78,7 @@ def _heartbeat_loop(stop_event: threading.Event, job_id: str, worker_id: str) ->
             if isinstance(renewed, list):
                 renewed = renewed[0] if renewed else False
             if not renewed:
-                logger.warning(
-                    "Worker %s no longer owns capture job %s; heartbeat stopped",
-                    worker_id,
-                    job_id,
-                )
+                logger.warning("Worker %s no longer owns capture job %s; heartbeat stopped", worker_id, job_id)
                 return
         except Exception:
             logger.warning("Could not renew lease for job %s", job_id, exc_info=True)
@@ -98,7 +93,6 @@ def _schedule_failure(
     permanent: bool = False,
     error_message: str | None = None,
 ) -> str:
-    """Atomically transition an owned job to retry/dead."""
     client = get_client()
     result = client.rpc(
         "fail_capture_job",
@@ -117,15 +111,11 @@ def _schedule_failure(
 
 
 def process_one() -> bool:
-    """Claim and process one queued capture. Returns False when queue is empty."""
     client = get_client()
     worker_id = _worker_id()
     claim = client.rpc(
         "claim_capture_job",
-        {
-            "p_worker_id": worker_id,
-            "p_lease_seconds": LEASE_SECONDS,
-        },
+        {"p_worker_id": worker_id, "p_lease_seconds": LEASE_SECONDS},
     ).execute()
     rows = claim.data or []
     if not rows:
@@ -136,32 +126,15 @@ def process_one() -> bool:
     capture_id = job["capture_id"]
     attempt = int(job["attempts"])
 
-    capture_result = (
-        client.table("capture_events")
-        .select("*")
-        .eq("id", capture_id)
-        .limit(1)
-        .execute()
-    )
+    capture_result = client.table("capture_events").select("*").eq("id", capture_id).limit(1).execute()
     if not capture_result.data:
         logger.error("Claimed capture %s no longer exists", capture_id)
-        _schedule_failure(
-            job_id,
-            worker_id,
-            attempt,
-            ValueError("capture no longer exists"),
-            permanent=True,
-        )
+        _schedule_failure(job_id, worker_id, attempt, ValueError("capture no longer exists"), permanent=True)
         return True
 
     capture = capture_result.data[0]
     if capture.get("status") == "completed":
-        _schedule_failure(
-            job_id,
-            worker_id,
-            attempt,
-            RuntimeError("capture already completed"),
-        )
+        _schedule_failure(job_id, worker_id, attempt, RuntimeError("capture already completed"))
         return True
 
     text = (capture.get("raw_ocr_text") or "").strip()
@@ -179,6 +152,9 @@ def process_one() -> bool:
         _schedule_failure(job_id, worker_id, attempt, error, permanent=True)
         return True
 
+    entities = capture.get("entities") or {}
+    visual_context = str(entities.get("visual_context") or "").strip()[:2000] or None
+
     model = os.environ.get("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
     started = perf_counter()
     stop_heartbeat = threading.Event()
@@ -194,7 +170,7 @@ def process_one() -> bool:
         try:
             extraction = extract_intent_from_metadata(
                 text,
-                capture.get("entities") or {},
+                entities,
                 capture.get("source"),
                 capture.get("ocr_blocks") or [],
             )
@@ -231,19 +207,13 @@ def process_one() -> bool:
                     permanent=not retryable,
                     error_message=detail,
                 )
-                logger.warning(
-                    "Capture %s moved to %s after Gemini failure (retryable=%s)",
-                    capture_id,
-                    status,
-                    retryable,
-                )
+                logger.warning("Capture %s moved to %s after Gemini failure", capture_id, status)
             except Exception:
                 logger.exception("Could not record Gemini failure for capture %s", capture_id)
             return True
 
         latency_ms = int((perf_counter() - started) * 1000)
         normalized = extraction.model_dump()
-
         _record_extraction(
             capture_id,
             attempt,
@@ -270,11 +240,18 @@ def process_one() -> bool:
             },
         ).execute()
 
+        created_memories = result.data or []
+        if visual_context:
+            memory_ids = [row.get("id") for row in created_memories if row.get("id")]
+            if memory_ids:
+                client.table("memories").update({"visual_context": visual_context}).in_("id", memory_ids).eq("user_id", capture["user_id"]).execute()
+
         logger.info(
-            "Capture %s completed with %d memories on attempt %d",
+            "Capture %s completed with %d memories on attempt %d%s",
             capture_id,
-            len(result.data or []),
+            len(created_memories),
             attempt,
+            " + visual context" if visual_context else "",
         )
     except Exception as exc:
         latency_ms = int((perf_counter() - started) * 1000)
@@ -296,11 +273,7 @@ def process_one() -> bool:
         try:
             status = _schedule_failure(job_id, worker_id, attempt, exc)
             if status == "lost_lease":
-                logger.warning(
-                    "Capture %s failure ignored because worker %s lost the lease",
-                    capture_id,
-                    worker_id,
-                )
+                logger.warning("Capture %s failure ignored because worker %s lost the lease", capture_id, worker_id)
         except Exception:
             logger.exception("Could not schedule retry for capture %s", capture_id)
     finally:
