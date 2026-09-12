@@ -184,13 +184,19 @@ export async function uploadScreenshot(imageAsset) {
   })
 }
 
-export async function askChat(question) {
+export async function askChat(question, history = []) {
   requireApiBase()
   const headers = await authHeaders({ 'Content-Type': 'application/json' })
+  const cleanHistory = Array.isArray(history)
+    ? history
+        .filter((turn) => turn && (turn.role === 'user' || turn.role === 'assistant') && String(turn.text || '').trim())
+        .slice(-10)
+        .map((turn) => ({ role: turn.role, text: String(turn.text).trim().slice(0, 1500) }))
+    : []
   const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ question, client_request_id: randomUuid() }),
+    body: JSON.stringify({ question, client_request_id: randomUuid(), history: cleanHistory }),
   })
   const data = await readJson(res)
   if (!res.ok) throw apiError(data.detail || 'Chat failed', res.status, data)
