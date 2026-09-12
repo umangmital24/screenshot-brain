@@ -115,6 +115,40 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
     return score
 
 
+def _has_relevance_evidence(memory: dict, parsed: ParsedAskQuery, score: float) -> bool:
+    """Reject nearest-neighbour results that are not actually relevant.
+
+    Retrieval systems always have a nearest item, so a top-k result alone is not
+    evidence of a match. Require lexical/intent/color evidence, or a genuinely
+    strong vector similarity, before a memory can be surfaced to the user.
+    """
+    if score <= 0:
+        return False
+
+    name = _text(memory.get("item_name"))
+    category = _text(memory.get("category"))
+    summary = _text(memory.get("summary"))
+    details = _text(memory.get("extracted_text"))
+    visual = _visual_text(memory.get("visual_context"))
+    searchable = f"{name} {category} {summary} {details} {visual}"
+
+    term_hits = sum(1 for term in parsed.terms if _word_match_score(term, searchable) > 0)
+    color_hits = sum(1 for color in parsed.colors if color in searchable)
+    intent_hit = bool(parsed.intent and _text(memory.get("intent")) == parsed.intent.lower())
+    vector_similarity = float(memory.get("vector_similarity") or 0.0)
+
+    if parsed.terms and term_hits:
+        return True
+    if parsed.colors and color_hits:
+        return True
+    if intent_hit:
+        return True
+
+    # Semantic-only matches must clear a meaningful similarity bar. This is the
+    # guard that prevents unrelated memories such as movies appearing for "Hi".
+    return vector_similarity >= 0.55
+
+
 def _merge_candidates(*groups: list[dict]) -> list[dict]:
     merged: dict[str, dict] = {}
     for group in groups:
@@ -211,10 +245,14 @@ def retrieve_memories(user_id: str, parsed: ParsedAskQuery, top_k: int = DEFAULT
     ranked = [(score_memory(memory, parsed), memory) for memory in candidates]
     ranked.sort(key=lambda pair: pair[0], reverse=True)
 
-    threshold = 0.15 if parsed.mode == "retrieve" else 0.09
-    matches = [memory for score, memory in ranked if score >= threshold]
-    if not matches and parsed.mode == "reason" and ranked:
-        matches = [memory for _, memory in ranked[: min(top_k, 4)]]
+    # A candidate being in top-k does not make it a match. Keep only candidates
+    # that clear both the score floor and a relevance-evidence check.
+    threshold = 0.18 if parsed.mode == "retrieve" else 0.14
+    matches = [
+        memory
+        for score, memory in ranked
+        if score >= threshold and _has_relevance_evidence(memory, parsed, score)
+    ]
     return matches[:top_k]
 
 
