@@ -1,13 +1,16 @@
 package com.umangmittal.screenshotmemory
 
+import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.net.Uri
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import java.io.File
 
 private class SamhaalDbHelper(context: Context) : SQLiteOpenHelper(context, "samhaal-local.db", null, 1) {
   override fun onCreate(db: SQLiteDatabase) {
@@ -40,11 +43,16 @@ class LocalStoreModule(private val reactContext: ReactApplicationContext) : Reac
   @ReactMethod
   fun upsertPendingCapture(clientEventId: String, payload: String, promise: Promise) {
     try {
-      helper.writableDatabase.execSQL(
-        """INSERT INTO pending_captures(client_event_id,payload,updated_at)
-           VALUES(?,?,?)
-           ON CONFLICT(client_event_id) DO UPDATE SET payload=excluded.payload, updated_at=excluded.updated_at""",
-        arrayOf(clientEventId, payload, System.currentTimeMillis())
+      val values = ContentValues().apply {
+        put("client_event_id", clientEventId)
+        put("payload", payload)
+        put("updated_at", System.currentTimeMillis())
+      }
+      helper.writableDatabase.insertWithOnConflict(
+        "pending_captures",
+        null,
+        values,
+        SQLiteDatabase.CONFLICT_REPLACE,
       )
       promise.resolve(null)
     } catch (e: Exception) {
@@ -81,11 +89,17 @@ class LocalStoreModule(private val reactContext: ReactApplicationContext) : Reac
   @ReactMethod
   fun upsertLocalMedia(memoryId: String, uri: String, screenshotId: String?, savedAt: String, promise: Promise) {
     try {
-      helper.writableDatabase.execSQL(
-        """INSERT INTO local_media(memory_id,uri,screenshot_id,saved_at)
-           VALUES(?,?,?,?)
-           ON CONFLICT(memory_id) DO UPDATE SET uri=excluded.uri, screenshot_id=excluded.screenshot_id, saved_at=excluded.saved_at""",
-        arrayOf(memoryId, uri, screenshotId, savedAt)
+      val values = ContentValues().apply {
+        put("memory_id", memoryId)
+        put("uri", uri)
+        if (screenshotId == null) putNull("screenshot_id") else put("screenshot_id", screenshotId)
+        put("saved_at", savedAt)
+      }
+      helper.writableDatabase.insertWithOnConflict(
+        "local_media",
+        null,
+        values,
+        SQLiteDatabase.CONFLICT_REPLACE,
       )
       promise.resolve(null)
     } catch (e: Exception) {
@@ -113,6 +127,22 @@ class LocalStoreModule(private val reactContext: ReactApplicationContext) : Reac
       promise.resolve(rows)
     } catch (e: Exception) {
       promise.reject("SQLITE_MEDIA_LIST", e)
+    }
+  }
+
+  @ReactMethod
+  fun isUriAvailable(rawUri: String, promise: Promise) {
+    try {
+      val uri = Uri.parse(rawUri)
+      val available = when (uri.scheme?.lowercase()) {
+        "content" -> reactContext.contentResolver.openAssetFileDescriptor(uri, "r")?.use { true } ?: false
+        "file" -> File(uri.path ?: "").exists()
+        null, "" -> File(rawUri).exists()
+        else -> true
+      }
+      promise.resolve(available)
+    } catch (_: Exception) {
+      promise.resolve(false)
     }
   }
 }
