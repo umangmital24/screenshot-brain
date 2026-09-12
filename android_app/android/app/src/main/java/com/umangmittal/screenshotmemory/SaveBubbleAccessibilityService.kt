@@ -12,6 +12,7 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.util.Log
 import android.view.Display
 import android.view.Gravity
 import android.view.MotionEvent
@@ -48,6 +49,7 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     @Volatile var current: SaveBubbleAccessibilityService? = null
     private const val PREFS = "samhaal_save_bubble"
     private const val KEY_HIDDEN = "bubble_hidden"
+    private const val LOG_TAG = "SamhaalSaveBubble"
   }
 
   private lateinit var windowManager: WindowManager
@@ -55,6 +57,8 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
   private var bubbleParams: WindowManager.LayoutParams? = null
   private var removeTarget: TextView? = null
   private var removeTargetParams: WindowManager.LayoutParams? = null
+  private var debugPanel: TextView? = null
+  private val debugLines = mutableListOf<String>()
   private val mainHandler = Handler(Looper.getMainLooper())
   private var busy = false
   private var foregroundPackage: String? = null
@@ -70,6 +74,7 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
   override fun onDestroy() {
     removeBubble(false)
     hideRemoveTarget()
+    removeDebugPanel()
     isConnected = false
     if (current === this) current = null
     super.onDestroy()
@@ -94,11 +99,22 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     showBubble()
   }
 
+  fun reportDebugStage(message: String?) {
+    if (!message.isNullOrBlank()) debugLog(message)
+  }
+
   private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
   private fun circle(color: Int): GradientDrawable = GradientDrawable().apply {
     shape = GradientDrawable.OVAL
     setColor(color)
+  }
+
+  private fun roundedPanel(): GradientDrawable = GradientDrawable().apply {
+    shape = GradientDrawable.RECTANGLE
+    cornerRadius = dp(14).toFloat()
+    setColor(Color.argb(235, 20, 20, 24))
+    setStroke(dp(1), Color.argb(180, 120, 120, 130))
   }
 
   private fun showBubble() {
@@ -137,6 +153,63 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     windowManager.addView(view, params)
     bubble = view
     bubbleParams = params
+  }
+
+  private fun showDebugPanelIfNeeded() {
+    if (debugPanel != null) {
+      debugPanel?.visibility = View.VISIBLE
+      return
+    }
+
+    val panel = TextView(this).apply {
+      textSize = 11f
+      setTextColor(Color.WHITE)
+      gravity = Gravity.START
+      background = roundedPanel()
+      setPadding(dp(12), dp(10), dp(12), dp(10))
+      elevation = dp(14).toFloat()
+      maxLines = 10
+    }
+
+    val params = WindowManager.LayoutParams(
+      dp(330),
+      WindowManager.LayoutParams.WRAP_CONTENT,
+      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+      PixelFormat.TRANSLUCENT,
+    ).apply {
+      gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+      y = dp(110)
+    }
+
+    try {
+      windowManager.addView(panel, params)
+      debugPanel = panel
+    } catch (_: Exception) {}
+  }
+
+  private fun debugLog(message: String) {
+    Log.i(LOG_TAG, message)
+    mainHandler.post {
+      showDebugPanelIfNeeded()
+      val stamp = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
+      debugLines.add("$stamp  $message")
+      while (debugLines.size > 8) debugLines.removeAt(0)
+      debugPanel?.text = "Samhaal live log\n" + debugLines.joinToString("\n")
+      debugPanel?.visibility = View.VISIBLE
+    }
+  }
+
+  private fun removeDebugPanel() {
+    debugPanel?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
+    debugPanel = null
+    debugLines.clear()
+  }
+
+  private fun hideDebugPanelAfter(delayMs: Long) {
+    mainHandler.postDelayed({
+      if (!busy) debugPanel?.visibility = View.GONE
+    }, delayMs)
   }
 
   private fun attachDragAndTap(view: View, params: WindowManager.LayoutParams) {
@@ -252,55 +325,73 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
   private fun hideBubbleByUser() {
     prefs().edit().putBoolean(KEY_HIDDEN, true).apply()
     removeBubble(false)
+    removeDebugPanel()
     Toast.makeText(this, "Save Bubble hidden. Open Samhaal to show it again.", Toast.LENGTH_SHORT).show()
   }
 
   private fun captureCurrentScreen() {
-    if (busy) return
+    if (busy) {
+      debugLog("Tap ignored: previous save still running")
+      return
+    }
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
       Toast.makeText(this, "Save Bubble requires Android 11 or newer.", Toast.LENGTH_SHORT).show()
       return
     }
 
     busy = true
+    debugLines.clear()
     setBubbleState("…")
-
-    // Hide only while Android captures the screen so the bubble itself is not saved.
-    bubble?.visibility = View.INVISIBLE
-
     val sourceApp = sourceAppLabel(foregroundPackage)
+    debugLog("Tap received")
+    debugLog("Source: $sourceApp")
+    debugLog("Requesting Android screenshot")
+
+    // Hide Samhaal overlays only while Android captures the screen so they are not saved.
+    bubble?.visibility = View.INVISIBLE
+    debugPanel?.visibility = View.INVISIBLE
 
     mainHandler.postDelayed({
       takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
         override fun onSuccess(screenshot: ScreenshotResult) {
-          // The screenshot has already been captured, so restore the bubble immediately.
-          // OCR/network work can continue in the background without making the bubble vanish.
           bubble?.visibility = View.VISIBLE
+          debugPanel?.visibility = View.VISIBLE
           setBubbleState("…")
+          debugLog("Screenshot captured")
 
           val buffer = screenshot.hardwareBuffer
-          val hardwareBitmap = try { Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace) } catch (_: Exception) { null }
+          val hardwareBitmap = try {
+            Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
+          } catch (e: Exception) {
+            debugLog("Hardware bitmap error: ${e.message ?: e.javaClass.simpleName}")
+            null
+          }
           val bitmap = hardwareBitmap?.copy(Bitmap.Config.ARGB_8888, false)
           buffer.close()
           if (bitmap == null) {
             finishWithError("Could not capture this screen.")
             return
           }
+          debugLog("Bitmap ready: ${bitmap.width}x${bitmap.height}")
 
           val eventId = UUID.randomUUID().toString()
           val capturedAt = isoNow()
+          debugLog("Saving screenshot to gallery")
           val screenshotUri = saveScreenshotToGallery(bitmap, eventId)
           if (screenshotUri == null) {
             bitmap.recycle()
             finishWithError("Could not save the screenshot to your gallery.")
             return
           }
+          debugLog("Gallery save complete")
 
           runOnDeviceOcr(bitmap, eventId, capturedAt, screenshotUri, sourceApp)
         }
 
         override fun onFailure(errorCode: Int) {
           bubble?.visibility = View.VISIBLE
+          debugPanel?.visibility = View.VISIBLE
+          debugLog("Android screenshot failed, code=$errorCode")
           finishWithError("This screen could not be captured.")
         }
       })
@@ -324,6 +415,7 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
           success = bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
         }
         if (!success) {
+          debugLog("JPEG encode failed")
           resolver.delete(uri, null, null)
           return null
         }
@@ -333,11 +425,13 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
         }
         resolver.update(uri, publishValues, null, null)
         uri.toString()
-      } catch (_: Exception) {
+      } catch (e: Exception) {
+        debugLog("Gallery write error: ${e.message ?: e.javaClass.simpleName}")
         resolver.delete(uri, null, null)
         null
       }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+      debugLog("MediaStore error: ${e.message ?: e.javaClass.simpleName}")
       null
     }
   }
@@ -349,6 +443,7 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     screenshotUri: String,
     sourceApp: String,
   ) {
+    debugLog("Starting on-device OCR")
     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     val image = InputImage.fromBitmap(bitmap, 0)
 
@@ -356,8 +451,10 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
       .addOnSuccessListener { result ->
         val text = result.text.trim()
         val blocksJson = buildOcrBlocksJson(result.textBlocks, bitmap.width, bitmap.height)
+        val blockCount = result.textBlocks.size
         recognizer.close()
         bitmap.recycle()
+        debugLog("OCR complete: ${text.length} chars, $blockCount blocks")
 
         if (text.isBlank()) {
           finishWithError("No readable text found. Screenshot kept in your gallery.")
@@ -365,6 +462,7 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
         }
 
         try {
+          debugLog("Starting background sync")
           UploadHeadlessTaskService.enqueueText(
             this,
             text,
@@ -374,16 +472,22 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
             sourceApp,
             blocksJson,
           )
+          debugLog("Headless upload task started")
           mainHandler.postDelayed({
-            if (busy) finishWithError("Save timed out. Screenshot is still in your gallery.")
+            if (busy) {
+              debugLog("Timed out waiting for sync result")
+              finishWithError("Save timed out. Screenshot is still in your gallery.")
+            }
           }, 60000)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+          debugLog("Could not start upload task: ${e.message ?: e.javaClass.simpleName}")
           finishWithError("Screenshot saved. Open Samhaal and try again.")
         }
       }
-      .addOnFailureListener {
+      .addOnFailureListener { e ->
         recognizer.close()
         bitmap.recycle()
+        debugLog("OCR failed: ${e.message ?: e.javaClass.simpleName}")
         finishWithError("Could not read this screen. Screenshot kept in your gallery.")
       }
   }
@@ -430,9 +534,12 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
   fun reportSaveResult(success: Boolean, message: String? = null) {
     if (!busy) return
     if (success) {
+      debugLog("Sync completed successfully")
+      if (!message.isNullOrBlank()) debugLog(message)
       if (!message.isNullOrBlank()) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
       finishWithSuccess()
     } else {
+      debugLog("Sync failed: ${message ?: "unknown error"}")
       finishWithError(message ?: "Could not save this memory.")
     }
   }
@@ -441,29 +548,36 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     if (!busy) return
     bubble?.visibility = View.VISIBLE
     setBubbleState("…")
+    debugLog(message ?: "Save queued; background processing continues")
     if (!message.isNullOrBlank()) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     mainHandler.postDelayed({
       setBubbleState("✦")
       busy = false
+      hideDebugPanelAfter(8000)
     }, 1000)
   }
 
   private fun finishWithSuccess() {
     bubble?.visibility = View.VISIBLE
     setBubbleState("✓")
+    debugLog("DONE")
     mainHandler.postDelayed({
       setBubbleState("✦")
       busy = false
+      hideDebugPanelAfter(8000)
     }, 1000)
   }
 
   private fun finishWithError(message: String) {
     bubble?.visibility = View.VISIBLE
+    debugPanel?.visibility = View.VISIBLE
     setBubbleState("!")
-    Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    debugLog("ERROR: $message")
+    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     mainHandler.postDelayed({
       setBubbleState("✦")
       busy = false
+      hideDebugPanelAfter(15000)
     }, 1200)
   }
 
