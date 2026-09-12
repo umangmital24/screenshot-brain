@@ -24,6 +24,16 @@ export function showSaveBubble() {
   SaveBubble.showBubble()
 }
 
+export async function isNativeScreenshotDetectionEnabled() {
+  if (unsupported) return false
+  return SaveBubble.isNativeScreenshotDetectionEnabled()
+}
+
+export function setNativeScreenshotDetectionEnabled(enabled) {
+  if (unsupported) return
+  SaveBubble.setNativeScreenshotDetectionEnabled(Boolean(enabled))
+}
+
 export function openAccessibilitySettings() {
   if (unsupported) return
   SaveBubble.openAccessibilitySettings()
