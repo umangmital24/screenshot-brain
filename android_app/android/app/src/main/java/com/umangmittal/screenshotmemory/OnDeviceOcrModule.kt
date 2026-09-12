@@ -13,19 +13,23 @@ import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import kotlin.math.max
 import kotlin.math.min
 
 /**
  * Privacy boundary for Samhaal Android.
- * OCR and lightweight visual indexing run locally. Only derived text labels/colors can
- * leave the device; raw screenshot pixels are never uploaded by this module.
+ * OCR and lightweight visual indexing run locally. Only derived text labels/color ratios
+ * can leave the device; raw screenshot pixels are never uploaded by this module.
  */
 class OnDeviceOcrModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 
   override fun getName() = "OnDeviceOcr"
+
+  private data class ColorShare(val name: String, val ratio: Double)
 
   private fun parseUri(uriString: String): Uri =
     if (uriString.contains("://")) Uri.parse(uriString) else Uri.fromFile(File(uriString))
@@ -52,8 +56,8 @@ class OnDeviceOcrModule(private val reactContext: ReactApplicationContext) :
   }
 
   /**
-   * Builds search-only visual metadata such as "suit, formal wear, black".
-   * This lets Ask Samhaal answer appearance questions without uploading the screenshot.
+   * Builds a structured, privacy-safe visual index. The returned JSON contains only
+   * semantic labels and color ratios from the central content area, never image pixels.
    */
   @ReactMethod
   fun analyzeVisual(uriString: String, promise: Promise) {
@@ -77,45 +81,72 @@ class OnDeviceOcrModule(private val reactContext: ReactApplicationContext) :
 
     labeler.process(image)
       .addOnSuccessListener { labels ->
-        val labelNames = labels
+        val labelsJson = JSONArray()
+        labels
           .filter { it.confidence >= 0.42f }
           .sortedByDescending { it.confidence }
-          .map { it.text.trim() }
-          .filter { it.isNotBlank() }
-          .distinctBy { it.lowercase() }
+          .distinctBy { it.text.trim().lowercase() }
           .take(8)
+          .forEach { label ->
+            labelsJson.put(
+              JSONObject()
+                .put("name", label.text.trim())
+                .put("confidence", String.format(java.util.Locale.US, "%.3f", label.confidence).toDouble())
+            )
+          }
 
-        val parts = mutableListOf<String>()
-        if (labelNames.isNotEmpty()) parts.add("Visual labels: ${labelNames.joinToString(", ")}")
-        if (colors.isNotEmpty()) parts.add("Prominent colors: ${colors.joinToString(", ")}")
-        val context = parts.joinToString(". ").take(1800)
-
+        val context = visualJson(labelsJson, colors)
         labeler.close()
-        if (crop !== bitmap && !crop.isRecycled) crop.recycle()
-        if (!bitmap.isRecycled) bitmap.recycle()
+        recycle(bitmap, crop)
         promise.resolve(context)
       }
       .addOnFailureListener { error ->
         labeler.close()
-        if (crop !== bitmap && !crop.isRecycled) crop.recycle()
-        if (!bitmap.isRecycled) bitmap.recycle()
-
-        // Color metadata is still useful when the labeler cannot classify the image.
+        val context = visualJson(JSONArray(), colors)
+        recycle(bitmap, crop)
         if (colors.isNotEmpty()) {
-          promise.resolve("Prominent colors: ${colors.joinToString(", ")}")
+          promise.resolve(context)
         } else {
           promise.reject("VISUAL_INDEX_FAILED", "Could not visually index this screenshot.", error)
         }
       }
   }
 
+  private fun visualJson(labels: JSONArray, colors: List<ColorShare>): String {
+    val colorsJson = JSONArray()
+    colors.forEach { color ->
+      colorsJson.put(
+        JSONObject()
+          .put("name", color.name)
+          .put("ratio", String.format(java.util.Locale.US, "%.3f", color.ratio).toDouble())
+      )
+    }
+
+    return JSONObject()
+      .put("version", 2)
+      .put("privacy", "derived_on_device")
+      .put("region", "central_content")
+      .put("labels", labels)
+      .put("colors", colorsJson)
+      .toString()
+  }
+
+  private fun recycle(bitmap: Bitmap, crop: Bitmap) {
+    if (crop !== bitmap && !crop.isRecycled) crop.recycle()
+    if (!bitmap.isRecycled) bitmap.recycle()
+  }
+
+  /**
+   * Exclude most status-bar/search chrome and the lower action/title controls. The region
+   * intentionally favors the visual content that a user is likely trying to remember.
+   */
   private fun centralContentCrop(bitmap: Bitmap): Bitmap {
     if (bitmap.width < 40 || bitmap.height < 40) return bitmap
 
-    val left = (bitmap.width * 0.04f).toInt()
-    val top = (bitmap.height * 0.08f).toInt()
-    val right = (bitmap.width * 0.96f).toInt().coerceAtMost(bitmap.width)
-    val bottom = (bitmap.height * 0.82f).toInt().coerceAtMost(bitmap.height)
+    val left = (bitmap.width * 0.03f).toInt()
+    val top = (bitmap.height * 0.09f).toInt()
+    val right = (bitmap.width * 0.97f).toInt().coerceAtMost(bitmap.width)
+    val bottom = (bitmap.height * 0.76f).toInt().coerceAtMost(bitmap.height)
     val width = (right - left).coerceAtLeast(1)
     val height = (bottom - top).coerceAtLeast(1)
 
@@ -126,10 +157,14 @@ class OnDeviceOcrModule(private val reactContext: ReactApplicationContext) :
     }
   }
 
-  private fun prominentColors(bitmap: Bitmap): List<String> {
+  /**
+   * Center-weighted color distribution. App chrome/background pixels still contribute,
+   * but the middle of the saved visual gets 3x weight so the subject wins more often.
+   */
+  private fun prominentColors(bitmap: Bitmap): List<ColorShare> {
     val counts = linkedMapOf<String, Int>()
-    var sampled = 0
-    val step = max(1, min(bitmap.width, bitmap.height) / 90)
+    var weightedSamples = 0
+    val step = max(1, min(bitmap.width, bitmap.height) / 100)
     val hsv = FloatArray(3)
 
     var y = 0
@@ -140,43 +175,58 @@ class OnDeviceOcrModule(private val reactContext: ReactApplicationContext) :
         if (Color.alpha(pixel) >= 160) {
           Color.colorToHSV(pixel, hsv)
           val name = colorName(hsv[0], hsv[1], hsv[2])
-          counts[name] = (counts[name] ?: 0) + 1
-          sampled += 1
+          val xNorm = x.toFloat() / bitmap.width.toFloat()
+          val yNorm = y.toFloat() / bitmap.height.toFloat()
+          val weight = if (xNorm in 0.18f..0.82f && yNorm in 0.05f..0.92f) 3 else 1
+          counts[name] = (counts[name] ?: 0) + weight
+          weightedSamples += weight
         }
         x += step
       }
       y += step
     }
 
-    if (sampled == 0) return emptyList()
+    if (weightedSamples == 0) return emptyList()
 
-    val ranked = counts.entries
-      .filter { (_, count) -> count.toFloat() / sampled.toFloat() >= 0.055f }
-      .sortedByDescending { it.value }
-      .map { it.key }
-      .toMutableList()
-
-    // Appearance questions often use "black" even when a white app background is dominant.
-    val blackRatio = (counts["black"] ?: 0).toFloat() / sampled.toFloat()
-    if (blackRatio >= 0.045f && !ranked.contains("black")) ranked.add(0, "black")
-
-    return ranked.distinct().take(5)
+    return counts.entries
+      .map { entry -> ColorShare(entry.key, entry.value.toDouble() / weightedSamples.toDouble()) }
+      .filter { it.ratio >= 0.055 }
+      .sortedByDescending { it.ratio }
+      .take(6)
   }
 
+  /**
+   * Preserve dark chromatic colors instead of collapsing them into black. This is
+   * important for clothing searches where wine/maroon/navy must not become "black".
+   */
   private fun colorName(hue: Float, saturation: Float, value: Float): String {
-    if (value < 0.24f) return "black"
-    if (saturation < 0.12f && value > 0.88f) return "white"
-    if (saturation < 0.16f) return "gray"
+    if (value < 0.15f || (value < 0.23f && saturation < 0.28f)) return "black"
+
+    if (saturation < 0.12f) {
+      return when {
+        value > 0.90f -> "white"
+        value > 0.66f -> "light gray"
+        else -> "gray"
+      }
+    }
+
+    if (saturation < 0.30f && value > 0.76f && hue in 18f..68f) {
+      return if (value > 0.90f) "cream" else "beige"
+    }
 
     return when {
-      hue < 16f || hue >= 345f -> "red"
-      hue < 45f -> "orange"
-      hue < 70f -> "yellow"
+      hue < 18f || hue >= 345f -> if (value < 0.58f) "wine" else "red"
+      hue < 42f -> when {
+        value < 0.46f -> "brown"
+        saturation < 0.48f && value > 0.72f -> "beige"
+        else -> "orange"
+      }
+      hue < 70f -> if (saturation < 0.40f && value > 0.78f) "cream" else "yellow"
       hue < 165f -> "green"
       hue < 200f -> "cyan"
-      hue < 260f -> "blue"
+      hue < 260f -> if (value < 0.42f) "navy" else "blue"
       hue < 300f -> "purple"
-      hue < 345f -> "pink"
+      hue < 345f -> if (value < 0.58f) "wine" else "pink"
       else -> "red"
     }
   }
