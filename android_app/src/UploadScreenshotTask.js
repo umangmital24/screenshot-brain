@@ -1,7 +1,7 @@
 import { NativeModules, DeviceEventEmitter } from 'react-native'
 import { createCapture, waitForCapture, uploadScreenshot } from './api'
 import { saveLocalScreenshotReferences } from './localMemoryMedia'
-import { enqueuePendingCapture, isRetryableCaptureError } from './pendingCaptureQueue'
+import { enqueuePendingCapture, flushPendingCaptures, isRetryableCaptureError } from './pendingCaptureQueue'
 import { supabase } from './supabaseClient'
 
 const { SaveBubble, OnDeviceOcr } = NativeModules
@@ -53,11 +53,16 @@ async function deriveVisualContext(screenshotUri) {
 }
 
 /**
- * Headless bridge used by Android screenshot capture flows.
+ * Headless bridge used by Android screenshot capture and WorkManager retry flows.
  * Raw screenshot pixels stay on-device. OCR and visual indexing run locally. Only
  * OCR text, geometry, derived labels/colors, source-app context and metadata go upstream.
  */
 export default async function uploadScreenshotTask(data) {
+  if (data?.syncPending) {
+    await flushPendingCaptures()
+    return
+  }
+
   const extractedText = data?.extractedText
   const filePath = data?.filePath
   const clientEventId = data?.clientEventId
@@ -68,11 +73,7 @@ export default async function uploadScreenshotTask(data) {
   if (!extractedText && !filePath) return
 
   reportDebugStage('JS headless task running')
-
-  // Release the bubble immediately. Upload, classification and visual indexing continue
-  // independently in the background.
   reportBubblePending('Captured. Samhaal will finish this memory in the background.')
-
   reportDebugStage('Checking signed-in session')
 
   const { data: sessionData } = await supabase.auth.getSession()
@@ -81,7 +82,7 @@ export default async function uploadScreenshotTask(data) {
     if (extractedText && clientEventId) {
       await enqueuePendingCapture({ extractedText, clientEventId, capturedAt, screenshotUri, sourceApp, ocrBlocks })
       reportDebugStage('Saved to local retry queue')
-      reportBubblePending('Saved locally. Open Samhaal after signing in to sync.')
+      reportBubblePending('Saved locally. Samhaal will sync when network and sign-in are available.')
     } else {
       reportBubbleResult(false, 'Open Samhaal and sign in first.')
     }
@@ -159,7 +160,7 @@ export default async function uploadScreenshotTask(data) {
         lastError: err?.message || 'Sync failed',
       })
       reportDebugStage('Retryable error; saved locally')
-      reportBubblePending('Saved locally. Samhaal will retry sync automatically.')
+      reportBubblePending('Saved locally. Samhaal will retry automatically.')
       return
     }
 
