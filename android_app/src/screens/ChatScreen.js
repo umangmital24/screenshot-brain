@@ -25,6 +25,8 @@ const SUGGESTIONS = [
   'Show me things I wanted to buy',
 ]
 
+const MAX_VISIBLE_SOURCES = 3
+
 function cleanAssistantText(value) {
   if (!value) return ''
 
@@ -39,6 +41,33 @@ function cleanAssistantText(value) {
     .replace(/#{1,6}\s*/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+function getLocalConversationReply(value) {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[!?.,]+$/g, '')
+
+  if (!normalized) return null
+
+  if (/^(hi|hii+|hello|hey|heyy+|yo|hola|namaste|good morning|good afternoon|good evening)$/.test(normalized)) {
+    return 'Hey! What would you like me to find from your saved memories?'
+  }
+
+  if (/^(how are you|how r u|how're you|what's up|whats up|sup)$/.test(normalized)) {
+    return 'I’m ready to help. Ask me about anything you’ve saved in Samhaal.'
+  }
+
+  if (/^(thanks|thank you|thankyou|thx|ty|great|nice|cool|perfect|got it|okay|ok)$/.test(normalized)) {
+    return 'Anytime. Ask me whenever you want to find something you saved.'
+  }
+
+  if (/^(bye|goodbye|see you|cya|good night)$/.test(normalized)) {
+    return 'See you! Your saved memories will be here when you need them.'
+  }
+
+  return null
 }
 
 function SourceCard({ source, onOpenScreenshot }) {
@@ -83,7 +112,6 @@ export default function ChatScreen() {
       const withLocalMedia = await attachLocalMedia(memoryData.memories || [])
       await ensureVisualIndexes(withLocalMedia, 24)
     } catch (error) {
-      // Search should still work from OCR/text if visual indexing is unavailable.
       console.warn('Visual search indexing skipped:', error?.message || error)
     }
   }
@@ -101,25 +129,36 @@ export default function ChatScreen() {
   async function handleAsk(prefilled) {
     const q = (typeof prefilled === 'string' ? prefilled : question).trim()
     if (!q || asking) return
-    const history = recentConversationHistory()
+
+    const localReply = getLocalConversationReply(q)
     setQuestion('')
+
+    if (localReply) {
+      setLog((prev) => [
+        ...prev,
+        { type: 'user', text: q },
+        { type: 'assistant', text: localReply, sources: [] },
+      ])
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80)
+      return
+    }
+
+    const history = recentConversationHistory()
     setAsking(true)
     setLog((prev) => [...prev, { type: 'user', text: q }])
 
     try {
-      // Existing screenshots may pre-date visual indexing. Build a small private index
-      // from their local image references before asking the backend. This runs on-device;
-      // only derived labels/color ratios are synchronized, never raw screenshot pixels.
       await prepareVisualSearch()
 
       const data = await askChat(q, history)
       const sourcesWithLocalMedia = await attachLocalMediaToSources(data.sources || [])
+      const visibleSources = sourcesWithLocalMedia.slice(0, MAX_VISIBLE_SOURCES)
       setLog((prev) => [
         ...prev,
         {
           type: 'assistant',
           text: cleanAssistantText(data.answer),
-          sources: sourcesWithLocalMedia,
+          sources: visibleSources,
         },
       ])
     } catch (err) {
