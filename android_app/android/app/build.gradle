@@ -83,6 +83,9 @@ dependencies {
     implementation 'com.google.mlkit:text-recognition:16.0.1'
     implementation 'com.google.mlkit:image-labeling:17.0.9'
 
+    // Reliable network-constrained retries for captures that were queued while offline.
+    implementation 'androidx.work:work-runtime-ktx:2.11.2'
+
     implementation("com.facebook.react:react-android")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
