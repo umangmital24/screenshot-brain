@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import {
   View,
   Text,
@@ -6,46 +6,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
-  AppState,
-  DeviceEventEmitter,
   Image,
   Modal,
-  PermissionsAndroid,
-  Platform,
 } from 'react-native'
-import { useFocusEffect } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import { supabase } from '../supabaseClient'
-import { fetchMemories } from '../api'
-import { attachLocalMedia } from '../localMemoryMedia'
 import { colors, intentLabel, timeAgo } from '../theme'
 import OverlaySetupGuide from '../components/OverlaySetupGuide'
-import {
-  isNativeScreenshotDetectionEnabled,
-  isSaveBubbleEnabled,
-  isSaveBubbleSupported,
-  isSaveBubbleVisible,
-  openAccessibilitySettings,
-  setNativeScreenshotDetectionEnabled,
-  showSaveBubble,
-} from '../saveBubble'
-
-const SETUP_SEEN_KEY = 'samhaalSaveBubbleGuideSeen'
-
-function screenshotPermission() {
-  if (Platform.OS !== 'android') return null
-  return Number(Platform.Version) >= 33
-    ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
-    : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE
-}
-
-async function hasScreenshotMediaAccess() {
-  const permission = screenshotPermission()
-  if (!permission) return false
-  return PermissionsAndroid.check(permission)
-}
+import useDashboardController from '../features/memories/useDashboardController'
 
 const SAMPLE_MEMORIES = [
   {
@@ -95,6 +62,8 @@ function MemoryCard({ memory, onOpenImage }) {
             <Ionicons name="expand-outline" size={13} color={colors.white} />
           </View>
         </TouchableOpacity>
+      ) : memory.local_image_status === 'missing' ? (
+        <Text style={styles.missingMedia}>Original screenshot is no longer on this device.</Text>
       ) : null}
 
       <View style={styles.cardTopRow}>
@@ -109,203 +78,16 @@ function MemoryCard({ memory, onOpenImage }) {
 }
 
 export default function DashboardScreen() {
-  const [memories, setMemories] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [bubbleSupported, setBubbleSupported] = useState(false)
-  const [bubbleEnabled, setBubbleEnabled] = useState(false)
-  const [bubbleVisible, setBubbleVisible] = useState(false)
-  const [nativeScreenshotDetection, setNativeScreenshotDetectionState] = useState(false)
-  const [screenshotMediaAccess, setScreenshotMediaAccess] = useState(false)
-  const [setupGuideVisible, setSetupGuideVisible] = useState(false)
-  const [previewImageUri, setPreviewImageUri] = useState(null)
-  const [accountVisible, setAccountVisible] = useState(false)
-  const [accountEmail, setAccountEmail] = useState('')
-  const awaitingSettingsReturn = useRef(false)
-
-  const refreshNativeScreenshotState = useCallback(async () => {
-    const [enabled, access] = await Promise.all([
-      isNativeScreenshotDetectionEnabled(),
-      hasScreenshotMediaAccess(),
-    ])
-    setNativeScreenshotDetectionState(enabled)
-    setScreenshotMediaAccess(access)
-  }, [])
-
-  const refreshBubbleState = useCallback(async (allowAutoGuide = false) => {
-    const supported = await isSaveBubbleSupported()
-    const enabled = supported ? await isSaveBubbleEnabled() : false
-    const visible = enabled ? await isSaveBubbleVisible() : false
-    setBubbleSupported(supported)
-    setBubbleEnabled(enabled)
-    setBubbleVisible(visible)
-
-    if (allowAutoGuide && supported && !enabled) {
-      const seen = await AsyncStorage.getItem(SETUP_SEEN_KEY)
-      if (!seen) setSetupGuideVisible(true)
-    }
-  }, [])
-
-  useEffect(() => {
-    refreshBubbleState(true)
-    refreshNativeScreenshotState()
-  }, [refreshBubbleState, refreshNativeScreenshotState])
-
-  const load = useCallback(async (showFullLoader = true) => {
-    if (showFullLoader) setLoading(true)
-    try {
-      const data = await fetchMemories()
-      const withLocalMedia = await attachLocalMedia(data.memories || [])
-      setMemories(withLocalMedia)
-    } catch (err) {
-      if (showFullLoader) {
-        Alert.alert('Could not load your memories', err.message)
-      } else {
-        console.warn('Silent refresh failed:', err.message)
-      }
-    } finally {
-      if (showFullLoader) setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
-
-  const handleRefresh = useCallback(() => {
-    setRefreshing(true)
-    load(false)
-    refreshBubbleState(false)
-    refreshNativeScreenshotState()
-  }, [load, refreshBubbleState, refreshNativeScreenshotState])
-
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', async (state) => {
-      if (state !== 'active') return
-      load(false)
-      await refreshBubbleState(false)
-      await refreshNativeScreenshotState()
-      if (awaitingSettingsReturn.current) {
-        awaitingSettingsReturn.current = false
-        const enabled = await isSaveBubbleEnabled()
-        if (enabled) setSetupGuideVisible(false)
-      }
-    })
-    return () => sub.remove()
-  }, [load, refreshBubbleState, refreshNativeScreenshotState])
-
-  useEffect(() => {
-    const sub = DeviceEventEmitter.addListener('memoriesUpdated', () => {
-      load(false)
-    })
-    return () => sub.remove()
-  }, [load])
-
-  useFocusEffect(
-    useCallback(() => {
-      load(memories.length === 0)
-      refreshBubbleState(false)
-      refreshNativeScreenshotState()
-      return undefined
-    }, [load, refreshBubbleState, refreshNativeScreenshotState, memories.length])
-  )
-
-  async function handleBubbleCardPress() {
-    if (!bubbleSupported) return
-    if (!bubbleEnabled) {
-      setSetupGuideVisible(true)
-      return
-    }
-    if (!bubbleVisible) {
-      showSaveBubble()
-      setTimeout(() => refreshBubbleState(false), 150)
-      return
-    }
-    setSetupGuideVisible(true)
-  }
-
-  async function toggleNativeScreenshotDetection() {
-    if (!bubbleSupported) return
-
-    if (nativeScreenshotDetection) {
-      setNativeScreenshotDetectionEnabled(false)
-      setNativeScreenshotDetectionState(false)
-      return
-    }
-
-    if (!bubbleEnabled) {
-      Alert.alert(
-        'Enable Samhaal access first',
-        'Screenshot suggestions use the same Android Accessibility service as the Save Bubble. Enable it once, then turn this option on.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Open setup', onPress: () => setSetupGuideVisible(true) },
-        ],
-      )
-      return
-    }
-
-    let access = screenshotMediaAccess || await hasScreenshotMediaAccess()
-    if (!access) {
-      const permission = screenshotPermission()
-      if (!permission) return
-      const result = await PermissionsAndroid.request(permission, {
-        title: 'Allow screenshot suggestions',
-        message: 'Samhaal needs photo access only to notice newly created screenshots. It does not read screenshot pixels unless you tap Save to Samhaal.',
-        buttonPositive: 'Allow',
-        buttonNegative: 'Not now',
-      })
-      access = result === PermissionsAndroid.RESULTS.GRANTED
-      setScreenshotMediaAccess(access)
-    }
-
-    if (!access) {
-      Alert.alert(
-        'Photo access is required',
-        'To notice normal Android screenshots, Samhaal needs access to images. You can keep using the Save Bubble without this permission.',
-      )
-      return
-    }
-
-    setNativeScreenshotDetectionEnabled(true)
-    setNativeScreenshotDetectionState(true)
-  }
-
-  async function continueToSettings() {
-    await AsyncStorage.setItem(SETUP_SEEN_KEY, 'true')
-    awaitingSettingsReturn.current = true
-    openAccessibilitySettings()
-  }
-
-  async function dismissSetup() {
-    await AsyncStorage.setItem(SETUP_SEEN_KEY, 'true')
-    setSetupGuideVisible(false)
-  }
-
-  async function openAccountMenu() {
-    try {
-      const { data } = await supabase.auth.getUser()
-      setAccountEmail(data?.user?.email || '')
-    } catch {
-      setAccountEmail('')
-    }
-    setAccountVisible(true)
-  }
-
-  function confirmLogout() {
-    Alert.alert(
-      'Log out of Samhaal?',
-      'You can sign back in anytime. Your saved memories stay in your account.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log out',
-          style: 'destructive',
-          onPress: async () => {
-            setAccountVisible(false)
-            await supabase.auth.signOut()
-          },
-        },
-      ],
-    )
-  }
+  const controller = useDashboardController()
+  const {
+    memories, loading, refreshing,
+    bubbleSupported, bubbleEnabled, bubbleVisible,
+    nativeScreenshotDetection, screenshotMediaAccess,
+    setupGuideVisible, previewImageUri, setPreviewImageUri,
+    accountVisible, setAccountVisible, accountEmail,
+    handleRefresh, handleBubbleCardPress, toggleNativeScreenshotDetection,
+    continueToSettings, dismissSetup, openAccountMenu, confirmLogout,
+  } = controller
 
   const cardData = useMemo(() => (memories.length ? memories : SAMPLE_MEMORIES), [memories])
 
@@ -388,7 +170,7 @@ export default function DashboardScreen() {
 
             <View style={styles.privacyRow}>
               <Ionicons name="shield-checkmark-outline" size={16} color={colors.textMuted} />
-              <Text style={styles.privacyText}>Raw screenshots stay on your device. OCR runs on-device; only OCR text is sent to Samhaal.</Text>
+              <Text style={styles.privacyText}>Raw screenshots stay on your device. OCR and visual labels run on-device; only derived text and metadata are sent to Samhaal.</Text>
             </View>
 
             <View style={styles.sectionRow}>
@@ -477,6 +259,7 @@ const styles = StyleSheet.create({
   thumbnailWrap: { height: 150, borderRadius: 12, overflow: 'hidden', marginBottom: 15, backgroundColor: colors.surfaceMuted },
   thumbnail: { width: '100%', height: '100%' },
   imageBadge: { position: 'absolute', right: 8, bottom: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(9,9,11,0.78)', alignItems: 'center', justifyContent: 'center' },
+  missingMedia: { fontSize: 11, color: colors.textFaint, marginBottom: 12 },
   cardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 },
   intent: { fontSize: 10.5, letterSpacing: 0.7, textTransform: 'uppercase', fontWeight: '700', color: colors.textMuted },
   timeText: { fontSize: 10.5, color: colors.textFaint },
