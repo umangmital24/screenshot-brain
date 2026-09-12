@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
 import uuid
 
@@ -66,9 +66,20 @@ class MemoryUpdate(BaseModel):
         return cleaned or None
 
 
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    text: str = Field(..., min_length=1, max_length=1500)
+
+    @field_validator("text")
+    @classmethod
+    def clean_text(cls, value):
+        return value.strip()
+
+
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=1000)
     client_request_id: Optional[str] = Field(None, max_length=64)
+    history: List[ChatTurn] = Field(default_factory=list, max_length=10)
 
     @field_validator("question")
     @classmethod
