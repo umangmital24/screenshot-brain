@@ -1,6 +1,7 @@
 package com.umangmittal.screenshotmemory
 
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Handler
@@ -32,6 +33,11 @@ class SaveBubbleModule(private val reactContext: ReactApplicationContext) :
     return enabled.split(':').any { it.equals(expected, true) || it.equals(expectedShort, true) }
   }
 
+  private fun prefs() = reactContext.getSharedPreferences(
+    NativeScreenshotWatcher.PREFS,
+    Context.MODE_PRIVATE,
+  )
+
   @ReactMethod
   fun isSupported(promise: Promise) {
     promise.resolve(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
@@ -53,6 +59,19 @@ class SaveBubbleModule(private val reactContext: ReactApplicationContext) :
   fun showBubble() {
     mainHandler.post {
       SaveBubbleAccessibilityService.current?.showBubbleFromApp()
+    }
+  }
+
+  @ReactMethod
+  fun isNativeScreenshotDetectionEnabled(promise: Promise) {
+    promise.resolve(prefs().getBoolean(NativeScreenshotWatcher.KEY_ENABLED, false))
+  }
+
+  @ReactMethod
+  fun setNativeScreenshotDetectionEnabled(enabled: Boolean) {
+    prefs().edit().putBoolean(NativeScreenshotWatcher.KEY_ENABLED, enabled).apply()
+    mainHandler.post {
+      SaveBubbleAccessibilityService.current?.refreshNativeScreenshotDetection()
     }
   }
 
