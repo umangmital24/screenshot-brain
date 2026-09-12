@@ -27,6 +27,14 @@ export async function saveLocalScreenshotReferences(memories = [], screenshotUri
   await AsyncStorage.setItem(KEY, JSON.stringify(media))
 }
 
+export async function removeLocalMemoryReference(memoryId) {
+  if (!memoryId) return
+  const media = await getLocalMemoryMedia()
+  if (!media[memoryId]) return
+  delete media[memoryId]
+  await AsyncStorage.setItem(KEY, JSON.stringify(media))
+}
+
 export async function attachLocalMedia(memories = []) {
   const media = await getLocalMemoryMedia()
   return memories.map((memory) => ({
