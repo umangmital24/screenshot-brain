@@ -7,6 +7,9 @@ REASONING_TERMS = {
     "compare", "comparison", "summarize", "summary", "recommend", "recommendation",
     "best", "better", "worse", "why", "explain", "choose", "pick", "rank", "ranking",
     "pros", "cons", "difference", "differences", "similarities", "should i", "which is better",
+    # Referential follow-ups need conversation-aware resolution. They remain a small
+    # Gemini fallback instead of making every ordinary search generative.
+    "which one", "what about", "first one", "second one", "third one", "the first", "the second", "the third",
 }
 
 COLORS = {
@@ -26,8 +29,8 @@ INTENT_HINTS = {
 }
 
 STOPWORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "did", "do", "for", "from", "i", "in", "is",
-    "it", "me", "my", "of", "on", "or", "please", "saved", "samhaal", "show", "that", "the",
+    "a", "about", "an", "and", "are", "as", "at", "be", "did", "do", "for", "from", "i", "in", "is",
+    "it", "me", "my", "of", "on", "one", "or", "please", "saved", "samhaal", "show", "that", "the",
     "this", "to", "was", "what", "where", "which", "with", "you", "find", "memory", "memories",
 }
 
@@ -73,7 +76,6 @@ def parse_ask_query(question: str) -> ParsedAskQuery:
     raw = (question or "").strip()
     tokens = _tokens(raw)
     lowered = raw.lower()
-
     colors = tuple(sorted({color for color in COLORS if color in lowered}))
     color_tokens = {part for color in colors for part in color.split()}
 
