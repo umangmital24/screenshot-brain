@@ -30,7 +30,10 @@ async def list_memories(
             term = search.strip()[:100]
             term = term.replace(",", " ").replace("(", " ").replace(")", " ").strip()
             if term:
-                query = query.or_(f"item_name.ilike.%{term}%,summary.ilike.%{term}%,extracted_text.ilike.%{term}%")
+                query = query.or_(
+                    f"item_name.ilike.%{term}%,summary.ilike.%{term}%,"
+                    f"extracted_text.ilike.%{term}%,visual_context.ilike.%{term}%"
+                )
 
         result = query.order("last_seen", desc=True).range(offset, offset + limit - 1).execute()
         memories = result.data or []
