@@ -100,6 +100,8 @@ export default function DashboardScreen() {
   const [bubbleVisible, setBubbleVisible] = useState(false)
   const [setupGuideVisible, setSetupGuideVisible] = useState(false)
   const [previewImageUri, setPreviewImageUri] = useState(null)
+  const [accountVisible, setAccountVisible] = useState(false)
+  const [accountEmail, setAccountEmail] = useState('')
   const awaitingSettingsReturn = useRef(false)
 
   const refreshBubbleState = useCallback(async (allowAutoGuide = false) => {
@@ -198,6 +200,34 @@ export default function DashboardScreen() {
     setSetupGuideVisible(false)
   }
 
+  async function openAccountMenu() {
+    try {
+      const { data } = await supabase.auth.getUser()
+      setAccountEmail(data?.user?.email || '')
+    } catch {
+      setAccountEmail('')
+    }
+    setAccountVisible(true)
+  }
+
+  function confirmLogout() {
+    Alert.alert(
+      'Log out of Samhaal?',
+      'You can sign back in anytime. Your saved memories stay in your account.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log out',
+          style: 'destructive',
+          onPress: async () => {
+            setAccountVisible(false)
+            await supabase.auth.signOut()
+          },
+        },
+      ],
+    )
+  }
+
   const cardData = useMemo(() => (memories.length ? memories : SAMPLE_MEMORIES), [memories])
 
   return (
@@ -218,7 +248,7 @@ export default function DashboardScreen() {
                 <Text style={styles.brand}>Samhaal</Text>
                 <Text style={styles.title}>Remember it.</Text>
               </View>
-              <TouchableOpacity style={styles.profileButton} onPress={() => supabase.auth.signOut()} accessibilityLabel="Sign out">
+              <TouchableOpacity style={styles.profileButton} onPress={openAccountMenu} accessibilityLabel="Open account menu">
                 <Ionicons name="person-outline" size={18} color={colors.text} />
               </TouchableOpacity>
             </View>
@@ -268,6 +298,30 @@ export default function DashboardScreen() {
 
       <OverlaySetupGuide visible={setupGuideVisible} onOpenSettings={continueToSettings} onClose={dismissSetup} />
 
+      <Modal visible={accountVisible} transparent animationType="fade" onRequestClose={() => setAccountVisible(false)}>
+        <TouchableOpacity style={styles.accountBackdrop} activeOpacity={1} onPress={() => setAccountVisible(false)}>
+          <TouchableOpacity style={styles.accountSheet} activeOpacity={1} onPress={() => {}}>
+            <View style={styles.accountHandle} />
+            <View style={styles.accountHeaderRow}>
+              <View style={styles.accountAvatar}>
+                <Ionicons name="person-outline" size={20} color={colors.text} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.accountTitle}>Your account</Text>
+                <Text style={styles.accountEmail} numberOfLines={1}>{accountEmail || 'Signed in to Samhaal'}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.logoutButton} onPress={confirmLogout} activeOpacity={0.8}>
+              <Ionicons name="log-out-outline" size={18} color="#DC2626" />
+              <Text style={styles.logoutText}>Log out</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.accountHint}>Logging out does not delete your saved memories.</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       <Modal visible={!!previewImageUri} transparent animationType="fade" onRequestClose={() => setPreviewImageUri(null)}>
         <View style={styles.imageModalBackdrop}>
           <TouchableOpacity style={styles.imageClose} onPress={() => setPreviewImageUri(null)} accessibilityLabel="Close screenshot">
@@ -315,6 +369,16 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 17, lineHeight: 22, letterSpacing: -0.25, fontWeight: '700', color: colors.text },
   summary: { fontSize: 13, lineHeight: 19, color: colors.textMuted, marginTop: 7 },
   category: { fontSize: 11.5, color: colors.textFaint, marginTop: 14 },
+  accountBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.28)', justifyContent: 'flex-end' },
+  accountSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 28 },
+  accountHandle: { width: 38, height: 4, borderRadius: 2, backgroundColor: '#D4D4D8', alignSelf: 'center', marginBottom: 18 },
+  accountHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  accountAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
+  accountTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  accountEmail: { marginTop: 3, fontSize: 12.5, color: colors.textMuted },
+  logoutButton: { minHeight: 48, borderWidth: 1, borderColor: 'rgba(220,38,38,0.16)', backgroundColor: '#FFF8F8', borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  logoutText: { fontSize: 14, fontWeight: '700', color: '#DC2626' },
+  accountHint: { marginTop: 10, fontSize: 10.5, color: colors.textFaint, textAlign: 'center' },
   imageModalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.94)', alignItems: 'center', justifyContent: 'center' },
   fullImage: { width: '100%', height: '100%' },
   imageClose: { position: 'absolute', top: 48, right: 20, zIndex: 2, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },
