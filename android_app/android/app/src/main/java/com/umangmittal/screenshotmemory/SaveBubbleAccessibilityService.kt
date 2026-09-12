@@ -57,8 +57,6 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
   private var bubbleParams: WindowManager.LayoutParams? = null
   private var removeTarget: TextView? = null
   private var removeTargetParams: WindowManager.LayoutParams? = null
-  private var debugPanel: TextView? = null
-  private val debugLines = mutableListOf<String>()
   private val mainHandler = Handler(Looper.getMainLooper())
   private var busy = false
   private var foregroundPackage: String? = null
@@ -74,7 +72,6 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
   override fun onDestroy() {
     removeBubble(false)
     hideRemoveTarget()
-    removeDebugPanel()
     isConnected = false
     if (current === this) current = null
     super.onDestroy()
@@ -108,13 +105,6 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
   private fun circle(color: Int): GradientDrawable = GradientDrawable().apply {
     shape = GradientDrawable.OVAL
     setColor(color)
-  }
-
-  private fun roundedPanel(): GradientDrawable = GradientDrawable().apply {
-    shape = GradientDrawable.RECTANGLE
-    cornerRadius = dp(14).toFloat()
-    setColor(Color.argb(235, 20, 20, 24))
-    setStroke(dp(1), Color.argb(180, 120, 120, 130))
   }
 
   private fun showBubble() {
@@ -155,61 +145,8 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     bubbleParams = params
   }
 
-  private fun showDebugPanelIfNeeded() {
-    if (debugPanel != null) {
-      debugPanel?.visibility = View.VISIBLE
-      return
-    }
-
-    val panel = TextView(this).apply {
-      textSize = 11f
-      setTextColor(Color.WHITE)
-      gravity = Gravity.START
-      background = roundedPanel()
-      setPadding(dp(12), dp(10), dp(12), dp(10))
-      elevation = dp(14).toFloat()
-      maxLines = 10
-    }
-
-    val params = WindowManager.LayoutParams(
-      dp(330),
-      WindowManager.LayoutParams.WRAP_CONTENT,
-      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-      PixelFormat.TRANSLUCENT,
-    ).apply {
-      gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-      y = dp(110)
-    }
-
-    try {
-      windowManager.addView(panel, params)
-      debugPanel = panel
-    } catch (_: Exception) {}
-  }
-
   private fun debugLog(message: String) {
     Log.i(LOG_TAG, message)
-    mainHandler.post {
-      showDebugPanelIfNeeded()
-      val stamp = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
-      debugLines.add("$stamp  $message")
-      while (debugLines.size > 8) debugLines.removeAt(0)
-      debugPanel?.text = "Samhaal live log\n" + debugLines.joinToString("\n")
-      debugPanel?.visibility = View.VISIBLE
-    }
-  }
-
-  private fun removeDebugPanel() {
-    debugPanel?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
-    debugPanel = null
-    debugLines.clear()
-  }
-
-  private fun hideDebugPanelAfter(delayMs: Long) {
-    mainHandler.postDelayed({
-      if (!busy) debugPanel?.visibility = View.GONE
-    }, delayMs)
   }
 
   private fun attachDragAndTap(view: View, params: WindowManager.LayoutParams) {
@@ -325,7 +262,6 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
   private fun hideBubbleByUser() {
     prefs().edit().putBoolean(KEY_HIDDEN, true).apply()
     removeBubble(false)
-    removeDebugPanel()
     Toast.makeText(this, "Save Bubble hidden. Open Samhaal to show it again.", Toast.LENGTH_SHORT).show()
   }
 
@@ -340,22 +276,19 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     }
 
     busy = true
-    debugLines.clear()
     setBubbleState("…")
     val sourceApp = sourceAppLabel(foregroundPackage)
     debugLog("Tap received")
     debugLog("Source: $sourceApp")
     debugLog("Requesting Android screenshot")
 
-    // Hide Samhaal overlays only while Android captures the screen so they are not saved.
+    // Hide only the bubble while Android captures the screen so it is not saved.
     bubble?.visibility = View.INVISIBLE
-    debugPanel?.visibility = View.INVISIBLE
 
     mainHandler.postDelayed({
       takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
         override fun onSuccess(screenshot: ScreenshotResult) {
           bubble?.visibility = View.VISIBLE
-          debugPanel?.visibility = View.VISIBLE
           setBubbleState("…")
           debugLog("Screenshot captured")
 
@@ -390,7 +323,6 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
 
         override fun onFailure(errorCode: Int) {
           bubble?.visibility = View.VISIBLE
-          debugPanel?.visibility = View.VISIBLE
           debugLog("Android screenshot failed, code=$errorCode")
           finishWithError("This screen could not be captured.")
         }
@@ -553,7 +485,6 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     mainHandler.postDelayed({
       setBubbleState("✦")
       busy = false
-      hideDebugPanelAfter(8000)
     }, 1000)
   }
 
@@ -564,20 +495,17 @@ class SaveBubbleAccessibilityService : AccessibilityService() {
     mainHandler.postDelayed({
       setBubbleState("✦")
       busy = false
-      hideDebugPanelAfter(8000)
     }, 1000)
   }
 
   private fun finishWithError(message: String) {
     bubble?.visibility = View.VISIBLE
-    debugPanel?.visibility = View.VISIBLE
     setBubbleState("!")
     debugLog("ERROR: $message")
     Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     mainHandler.postDelayed({
       setBubbleState("✦")
       busy = false
-      hideDebugPanelAfter(15000)
     }, 1200)
   }
 
