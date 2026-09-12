@@ -21,9 +21,10 @@ class MainApplication : Application(), ReactApplication {
       context = applicationContext,
       packageList =
         PackageList(this).packages.apply {
-          // Packages that cannot be autolinked yet can be added manually here, for example:
           add(SaveBubblePackage())
           add(OnDeviceOcrPackage())
+          add(LocalStorePackage())
+          add(SyncSchedulerPackage())
         }
     )
   }
@@ -37,6 +38,7 @@ class MainApplication : Application(), ReactApplication {
     }
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
+    PendingSyncScheduler.ensurePeriodic(this)
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {
