@@ -10,14 +10,16 @@ from time import perf_counter
 from supabase import create_client
 
 from app.services.db import get_client
-from app.services.vision import extract_intent_from_metadata, gemini_error_details
+from app.services.vision import extract_intent_from_metadata_with_usage, gemini_error_details
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "v4-visual-context"
+PROMPT_VERSION = "v5-quota-safe"
 SCHEMA_VERSION = "capture-extraction-v1"
 MAX_ATTEMPTS = int(os.environ.get("CAPTURE_MAX_ATTEMPTS", "5"))
-BASE_RETRY_SECONDS = int(os.environ.get("CAPTURE_RETRY_BASE_SECONDS", "15"))
+# Keep durable retries outside the provider call. A minute-scale base delay avoids
+# hammering the same Gemini quota window after a 429/RESOURCE_EXHAUSTED response.
+BASE_RETRY_SECONDS = int(os.environ.get("CAPTURE_RETRY_BASE_SECONDS", "60"))
 LEASE_SECONDS = max(int(os.environ.get("CAPTURE_WORKER_LEASE_SECONDS", "180")), 30)
 HEARTBEAT_SECONDS = max(
     10,
@@ -41,9 +43,11 @@ def _record_extraction(
     normalized_result: dict | None = None,
     latency_ms: int | None = None,
     input_chars: int | None = None,
+    token_usage: dict | None = None,
     error_type: str | None = None,
     error_message: str | None = None,
 ) -> None:
+    token_usage = token_usage or {}
     client = get_client()
     client.table("capture_extractions").insert({
         "capture_id": capture_id,
@@ -55,6 +59,10 @@ def _record_extraction(
         "normalized_result": normalized_result,
         "latency_ms": latency_ms,
         "input_chars": input_chars,
+        "prompt_tokens": token_usage.get("prompt_tokens"),
+        "candidate_tokens": token_usage.get("candidate_tokens"),
+        "thinking_tokens": token_usage.get("thinking_tokens"),
+        "total_tokens": token_usage.get("total_tokens"),
         "success": success,
         "error_type": error_type,
         "error_message": error_message,
@@ -63,7 +71,6 @@ def _record_extraction(
 
 def _heartbeat_loop(stop_event: threading.Event, job_id: str, worker_id: str) -> None:
     client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
-
     while not stop_event.wait(HEARTBEAT_SECONDS):
         try:
             result = client.rpc(
@@ -154,7 +161,6 @@ def process_one() -> bool:
 
     entities = capture.get("entities") or {}
     visual_context = str(entities.get("visual_context") or "").strip()[:2000] or None
-
     model = os.environ.get("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
     started = perf_counter()
     stop_heartbeat = threading.Event()
@@ -168,7 +174,7 @@ def process_one() -> bool:
 
     try:
         try:
-            extraction = extract_intent_from_metadata(
+            extraction, token_usage = extract_intent_from_metadata_with_usage(
                 text,
                 entities,
                 capture.get("source"),
@@ -222,6 +228,7 @@ def process_one() -> bool:
             normalized_result=normalized,
             latency_ms=latency_ms,
             input_chars=len(text),
+            token_usage=token_usage,
         )
 
         items = [item.model_dump() for item in extraction.items]
@@ -247,11 +254,12 @@ def process_one() -> bool:
                 client.table("memories").update({"visual_context": visual_context}).in_("id", memory_ids).eq("user_id", capture["user_id"]).execute()
 
         logger.info(
-            "Capture %s completed with %d memories on attempt %d%s",
+            "Capture %s completed with %d memories on attempt %d%s | tokens=%s",
             capture_id,
             len(created_memories),
             attempt,
             " + visual context" if visual_context else "",
+            token_usage.get("total_tokens"),
         )
     except Exception as exc:
         latency_ms = int((perf_counter() - started) * 1000)
@@ -286,10 +294,11 @@ def process_one() -> bool:
 def run_forever() -> None:
     poll_seconds = float(os.environ.get("CAPTURE_WORKER_POLL_SECONDS", "1.5"))
     logger.info(
-        "Samhaal capture worker started as %s (lease=%ss heartbeat=%ss)",
+        "Samhaal capture worker started as %s (lease=%ss heartbeat=%ss retry_base=%ss)",
         _worker_id(),
         LEASE_SECONDS,
         HEARTBEAT_SECONDS,
+        BASE_RETRY_SECONDS,
     )
     while True:
         try:
