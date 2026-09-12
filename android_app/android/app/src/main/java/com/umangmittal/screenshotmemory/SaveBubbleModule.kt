@@ -3,6 +3,8 @@ package com.umangmittal.screenshotmemory
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -11,6 +13,8 @@ import com.facebook.react.bridge.ReactMethod
 
 class SaveBubbleModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
+
+  private val mainHandler = Handler(Looper.getMainLooper())
 
   override fun getName() = "SaveBubble"
 
@@ -40,27 +44,37 @@ class SaveBubbleModule(private val reactContext: ReactApplicationContext) :
 
   @ReactMethod
   fun isVisible(promise: Promise) {
-    promise.resolve(SaveBubbleAccessibilityService.current?.isBubbleVisible() == true)
+    mainHandler.post {
+      promise.resolve(SaveBubbleAccessibilityService.current?.isBubbleVisible() == true)
+    }
   }
 
   @ReactMethod
   fun showBubble() {
-    SaveBubbleAccessibilityService.current?.showBubbleFromApp()
+    mainHandler.post {
+      SaveBubbleAccessibilityService.current?.showBubbleFromApp()
+    }
   }
 
   @ReactMethod
   fun reportDebugStage(message: String?) {
-    SaveBubbleAccessibilityService.current?.reportDebugStage(message)
+    mainHandler.post {
+      SaveBubbleAccessibilityService.current?.reportDebugStage(message)
+    }
   }
 
   @ReactMethod
   fun reportSaveResult(success: Boolean, message: String?) {
-    SaveBubbleAccessibilityService.current?.reportSaveResult(success, message)
+    mainHandler.post {
+      SaveBubbleAccessibilityService.current?.reportSaveResult(success, message)
+    }
   }
 
   @ReactMethod
   fun reportSavePending(message: String?) {
-    SaveBubbleAccessibilityService.current?.reportSavePending(message)
+    mainHandler.post {
+      SaveBubbleAccessibilityService.current?.reportSavePending(message)
+    }
   }
 
   @ReactMethod
