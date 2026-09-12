@@ -3,7 +3,8 @@ name: Android Dev Build
 on:
   push:
     branches:
-      - feature/android-app
+      - backend-web-launch-hardening
+      - main
     paths:
       - 'android_app/**'
       - '.github/workflows/android-dev-build.yml'
