@@ -17,7 +17,7 @@ COLORS = {
 
 INTENT_HINTS = {
     "READ_LATER": {"book", "books", "article", "articles", "read", "reading"},
-    "WATCH_LATER": {"movie", "movies", "film", "films", "series", "show", "shows", "watch", "reel", "video"},
+    "WATCH_LATER": {"movie", "movies", "film", "films", "series", "watch", "reel", "video"},
     "BUY_LATER": {"buy", "product", "products", "shoe", "shoes", "shirt", "shirts", "jacket", "jackets", "laptop", "phone"},
     "COOK_LATER": {"recipe", "recipes", "cook", "cooking", "dish", "food"},
     "VISIT_LATER": {"restaurant", "restaurants", "cafe", "cafes", "place", "places", "visit", "travel", "hotel", "hotels"},
@@ -92,11 +92,19 @@ def _detect_time_window(text: str) -> tuple[int | None, int | None]:
     return None, None
 
 
+def _detect_colors(text: str) -> tuple[str, ...]:
+    lowered = text.lower()
+    found = {
+        color for color in COLORS
+        if re.search(rf"(?<![a-z0-9]){re.escape(color)}(?![a-z0-9])", lowered)
+    }
+    return tuple(sorted(found))
+
+
 def parse_ask_query(question: str) -> ParsedAskQuery:
     raw = (question or "").strip()
     tokens = _tokens(raw)
-    lowered = raw.lower()
-    colors = tuple(sorted({color for color in COLORS if color in lowered}))
+    colors = _detect_colors(raw)
     color_tokens = {part for color in colors for part in color.split()}
     since_days, before_days = _detect_time_window(raw)
 
