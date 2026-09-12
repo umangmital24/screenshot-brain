@@ -49,6 +49,11 @@ class SaveBubbleModule(private val reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
+  fun reportDebugStage(message: String?) {
+    SaveBubbleAccessibilityService.current?.reportDebugStage(message)
+  }
+
+  @ReactMethod
   fun reportSaveResult(success: Boolean, message: String?) {
     SaveBubbleAccessibilityService.current?.reportSaveResult(success, message)
   }
