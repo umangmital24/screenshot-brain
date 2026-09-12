@@ -74,13 +74,36 @@ def _in_time_window(memory: dict, parsed: ParsedAskQuery) -> bool:
     return True
 
 
+def _searchable(memory: dict) -> tuple[str, str]:
+    name = _text(memory.get("item_name"))
+    category = _text(memory.get("category"))
+    summary = _text(memory.get("summary"))
+    details = _text(memory.get("extracted_text"))
+    visual = _visual_text(memory.get("visual_context"))
+    return f"{name} {category} {summary} {details}", visual
+
+
+def _passes_explicit_constraints(memory: dict, parsed: ParsedAskQuery) -> bool:
+    searchable, visual = _searchable(memory)
+    combined = f"{searchable} {visual}"
+
+    if parsed.intent and _text(memory.get("intent")) != parsed.intent.lower():
+        return False
+
+    if parsed.colors:
+        for color in parsed.colors:
+            if not re.search(rf"\b{re.escape(color)}\b", combined):
+                return False
+
+    return True
+
+
 def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
     name = _text(memory.get("item_name"))
     category = _text(memory.get("category"))
     summary = _text(memory.get("summary"))
     details = _text(memory.get("extracted_text"))
     visual = _visual_text(memory.get("visual_context"))
-    searchable = f"{name} {category} {summary} {details}"
     score = 0.0
 
     if parsed.terms:
@@ -94,24 +117,22 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
                 _word_match_score(term, visual) * 0.65,
             )
             term_scores.append(best)
-        score += sum(term_scores) / len(term_scores) * 0.58
+        score += sum(term_scores) / len(term_scores) * 0.62
     else:
-        score += 0.12
+        score += 0.08
 
     vector_similarity = float(memory.get("vector_similarity") or 0.0)
     if vector_similarity > 0:
-        score += min(max(vector_similarity, 0.0), 1.0) * 0.24
+        score += min(max(vector_similarity, 0.0), 1.0) * 0.22
 
     if parsed.colors:
-        matched_colors = sum(1 for color in parsed.colors if color in visual or color in searchable)
-        score += 0.16 * (matched_colors / len(parsed.colors)) if matched_colors else -0.18
-
+        score += 0.12
     if parsed.intent:
-        score += 0.08 if _text(memory.get("intent")) == parsed.intent.lower() else -0.12
+        score += 0.10
 
-    score += 0.03 * _recency_score(memory.get("last_seen"))
+    score += 0.025 * _recency_score(memory.get("last_seen"))
     frequency = max(int(memory.get("frequency") or 1), 1)
-    score += min(math.log2(frequency + 1) / 10.0, 0.02)
+    score += min(math.log2(frequency + 1) / 12.0, 0.015)
     return score
 
 
@@ -119,34 +140,18 @@ def _has_relevance_evidence(memory: dict, parsed: ParsedAskQuery, score: float) 
     if score <= 0:
         return False
 
-    name = _text(memory.get("item_name"))
-    category = _text(memory.get("category"))
-    summary = _text(memory.get("summary"))
-    details = _text(memory.get("extracted_text"))
-    visual = _visual_text(memory.get("visual_context"))
-    searchable = f"{name} {category} {summary} {details} {visual}"
-
-    term_hits = sum(1 for term in parsed.terms if _word_match_score(term, searchable) > 0)
-    color_hits = sum(1 for color in parsed.colors if color in searchable)
-    intent_matches = not parsed.intent or _text(memory.get("intent")) == parsed.intent.lower()
+    searchable, visual = _searchable(memory)
+    combined = f"{searchable} {visual}"
+    term_hits = sum(1 for term in parsed.terms if _word_match_score(term, combined) > 0)
     vector_similarity = float(memory.get("vector_similarity") or 0.0)
 
-    # Explicit constraints are gates, not weak ranking hints. If the user asks for
-    # black, don't surface beige; if they ask for jobs, don't surface AI movies.
-    if parsed.colors and color_hits == 0:
-        return False
-    if parsed.intent and not intent_matches:
-        return False
-
-    # Topic terms should have lexical support unless semantic similarity is unusually
-    # strong. This keeps hybrid search useful without allowing nearest-neighbour noise.
     if parsed.terms:
-        return term_hits > 0 or vector_similarity >= 0.68
+        return term_hits > 0 or vector_similarity >= 0.66
 
-    if parsed.colors or parsed.intent:
+    if parsed.colors or parsed.intent or parsed.since_days is not None or parsed.before_days is not None:
         return True
 
-    return vector_similarity >= 0.68
+    return False
 
 
 def _merge_candidates(*groups: list[dict]) -> list[dict]:
@@ -241,28 +246,32 @@ def _fetch_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict
 
 def retrieve_memories(user_id: str, parsed: ParsedAskQuery, top_k: int = DEFAULT_TOP_K) -> list[dict]:
     client = get_client()
-    candidates = [m for m in _fetch_candidates(client, user_id, parsed) if _in_time_window(m, parsed)]
+    candidates = [
+        memory
+        for memory in _fetch_candidates(client, user_id, parsed)
+        if _in_time_window(memory, parsed) and _passes_explicit_constraints(memory, parsed)
+    ]
+
     ranked = [(score_memory(memory, parsed), memory) for memory in candidates]
     ranked.sort(key=lambda pair: pair[0], reverse=True)
 
     matches = [
         memory
         for score, memory in ranked
-        if score >= 0.18 and _has_relevance_evidence(memory, parsed, score)
+        if score >= 0.20 and _has_relevance_evidence(memory, parsed, score)
     ]
     return matches[:top_k]
 
 
 def compose_retrieval_answer(parsed: ParsedAskQuery, memories: list[dict]) -> str:
     if not memories:
+        if parsed.colors:
+            return f"I couldn't find a saved memory matching {', '.join(parsed.colors)}."
         return "I couldn't find a matching saved memory."
+
     if len(memories) == 1:
-        memory = memories[0]
-        summary = (memory.get("summary") or "").strip()
-        if summary:
-            return f"I found {memory['item_name']}. {summary}"
-        return f"I found {memory['item_name']} in your saved memories."
+        return f"Found 1 relevant memory: {memories[0]['item_name']}."
 
     names = [str(memory.get("item_name") or "Saved item").strip() for memory in memories[:5]]
     suffix = "" if len(memories) <= 5 else f" and {len(memories) - 5} more"
-    return f"I found {len(memories)} matching memories: {', '.join(names)}{suffix}."
+    return f"Found {len(memories)} relevant memories: {', '.join(names)}{suffix}."
