@@ -7,7 +7,7 @@ import com.facebook.react.HeadlessJsTaskService
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.jstasks.HeadlessJsTaskConfig
 
-/** Bridges native Save Bubble OCR into the authenticated JS API layer. */
+/** Bridges native Save Bubble OCR and WorkManager retries into the authenticated JS API layer. */
 class UploadHeadlessTaskService : HeadlessJsTaskService() {
 
   companion object {
@@ -30,6 +30,12 @@ class UploadHeadlessTaskService : HeadlessJsTaskService() {
       context.startService(intent)
     }
 
+    fun enqueueSync(context: Context) {
+      val intent = Intent(context, UploadHeadlessTaskService::class.java)
+      intent.putExtra("syncPending", true)
+      context.startService(intent)
+    }
+
     // Compatibility for the older screenshot watcher implementation.
     fun enqueueUpload(context: Context, filePath: String) {
       val intent = Intent(context, UploadHeadlessTaskService::class.java)
@@ -42,11 +48,13 @@ class UploadHeadlessTaskService : HeadlessJsTaskService() {
     val extras: Bundle = intent?.extras ?: return null
     val extractedText = extras.getString("extractedText")
     val filePath = extras.getString("filePath")
-    if (extractedText.isNullOrBlank() && filePath.isNullOrBlank()) return null
+    val syncPending = extras.getBoolean("syncPending", false)
+    if (extractedText.isNullOrBlank() && filePath.isNullOrBlank() && !syncPending) return null
 
     val data = Arguments.createMap()
     if (!extractedText.isNullOrBlank()) data.putString("extractedText", extractedText)
     if (!filePath.isNullOrBlank()) data.putString("filePath", filePath)
+    if (syncPending) data.putBoolean("syncPending", true)
     extras.getString("clientEventId")?.let { data.putString("clientEventId", it) }
     extras.getString("capturedAt")?.let { data.putString("capturedAt", it) }
     extras.getString("screenshotUri")?.let { data.putString("screenshotUri", it) }
