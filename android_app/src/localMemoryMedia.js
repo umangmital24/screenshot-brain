@@ -34,3 +34,11 @@ export async function attachLocalMedia(memories = []) {
     local_image_uri: media[memory.id]?.uri || null,
   }))
 }
+
+export async function attachLocalMediaToSources(sources = []) {
+  const media = await getLocalMemoryMedia()
+  return sources.map((source) => ({
+    ...source,
+    local_image_uri: media[source.memory_id]?.uri || null,
+  }))
+}
