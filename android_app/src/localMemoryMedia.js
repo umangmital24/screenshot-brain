@@ -41,6 +41,17 @@ export async function getLocalMemoryMedia() {
   }
 }
 
+async function mediaState(value) {
+  if (!value?.uri) return { uri: null, status: 'missing' }
+  if (!LocalStore?.isUriAvailable) return { uri: value.uri, status: 'available' }
+  try {
+    const available = await LocalStore.isUriAvailable(value.uri)
+    return { uri: available ? value.uri : null, status: available ? 'available' : 'missing' }
+  } catch {
+    return { uri: value.uri, status: 'unknown' }
+  }
+}
+
 export async function saveLocalScreenshotReferences(memories = [], screenshotUri, screenshotId = null) {
   if (!screenshotUri || !Array.isArray(memories) || memories.length === 0) return
   await migrateLegacyMedia()
@@ -60,16 +71,24 @@ export async function saveLocalScreenshotReferences(memories = [], screenshotUri
 
 export async function attachLocalMedia(memories = []) {
   const media = await getLocalMemoryMedia()
-  return memories.map((memory) => ({
-    ...memory,
-    local_image_uri: media[memory.id]?.uri || null,
+  return Promise.all(memories.map(async (memory) => {
+    const state = await mediaState(media[memory.id])
+    return {
+      ...memory,
+      local_image_uri: state.uri,
+      local_image_status: state.status,
+    }
   }))
 }
 
 export async function attachLocalMediaToSources(sources = []) {
   const media = await getLocalMemoryMedia()
-  return sources.map((source) => ({
-    ...source,
-    local_image_uri: media[source.memory_id]?.uri || null,
+  return Promise.all(sources.map(async (source) => {
+    const state = await mediaState(media[source.memory_id])
+    return {
+      ...source,
+      local_image_uri: state.uri,
+      local_image_status: state.status,
+    }
   }))
 }
