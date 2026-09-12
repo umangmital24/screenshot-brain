@@ -2,7 +2,8 @@ import os
 import json
 from google import genai
 from google.genai import types
-from tenacity import retry, stop_after_attempt, wait_random_exponential
+from google.genai.errors import ClientError, ServerError
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_random_exponential
 from app.models.schema import VisionExtraction
 
 VALID_INTENTS = {
@@ -59,7 +60,52 @@ def _get_client() -> genai.Client:
     return _client
 
 
-@retry(wait=wait_random_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(3), reraise=True)
+def gemini_error_details(exc: Exception) -> tuple[bool, str]:
+    """Return (retryable, readable_detail) for Gemini/network failures.
+
+    408/429 and 5xx are transient. Other 4xx responses are request/config
+    failures and should not burn the capture worker's retry budget.
+    """
+    code = getattr(exc, "code", None)
+    status = getattr(exc, "status_code", None)
+    numeric_code = code if isinstance(code, int) else status if isinstance(status, int) else None
+
+    if isinstance(exc, ServerError):
+        return True, f"{type(exc).__name__}({numeric_code or '5xx'}): {exc}"
+
+    if isinstance(exc, ClientError):
+        retryable = numeric_code in {408, 409, 425, 429}
+        return retryable, f"{type(exc).__name__}({numeric_code or '4xx'}): {exc}"
+
+    text = str(exc).lower()
+    transient_markers = (
+        "timeout",
+        "timed out",
+        "connection reset",
+        "connection aborted",
+        "temporarily unavailable",
+        "service unavailable",
+        "rate limit",
+        "too many requests",
+    )
+    retryable = any(marker in text for marker in transient_markers)
+    return retryable, f"{type(exc).__name__}: {exc}"
+
+
+def _retryable_gemini_exception(exc: Exception) -> bool:
+    retryable, _ = gemini_error_details(exc)
+    return retryable
+
+
+_GEMINI_RETRY = retry(
+    retry=retry_if_exception(_retryable_gemini_exception),
+    wait=wait_random_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_attempt(3),
+    reraise=True,
+)
+
+
+@_GEMINI_RETRY
 def _call_gemini(image_bytes: bytes, mime_type: str, strict_retry: bool = False) -> str:
     client = _get_client()
     model = os.environ.get("GEMINI_VISION_MODEL", "gemini-2.5-flash")
@@ -108,7 +154,7 @@ def extract_intent_from_screenshot(image_bytes: bytes, mime_type: str = "image/p
     return _normalize_extraction(parsed)
 
 
-@retry(wait=wait_random_exponential(multiplier=1, min=1, max=10), stop=stop_after_attempt(3), reraise=False)
+@_GEMINI_RETRY
 def extract_intent_from_metadata(
     extracted_text: str,
     entities: dict | None = None,
