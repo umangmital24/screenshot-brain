@@ -9,9 +9,9 @@ import { supabase } from './src/supabaseClient'
 import { flushPendingCaptures } from './src/pendingCaptureQueue'
 import { colors } from './src/theme'
 import SplashScreen from './src/screens/SplashScreen'
-import LoginScreen from './src/screens/LoginScreen'
-import DashboardScreen from './src/screens/DashboardScreen'
-import ChatScreen from './src/screens/ChatScreen'
+import LoginScreen from './src/screens/LoginScreenV2'
+import DashboardScreen from './src/screens/DashboardScreenV2'
+import ChatScreen from './src/screens/ChatScreenV2'
 import ShareIntentHandler from './src/ShareIntentHandler'
 
 const navTheme = {
