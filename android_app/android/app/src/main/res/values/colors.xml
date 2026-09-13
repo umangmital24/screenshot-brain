@@ -1,5 +1,6 @@
 <resources>
   <color name="splashscreen_background">#FFFFFF</color>
-  <color name="iconBackground">#1B2430</color>
-  <color name="colorPrimary">#023c69</color>
+  <color name="iconBackground">#050505</color>
+  <color name="samhaal_icon_background">#050505</color>
+  <color name="colorPrimary">#050505</color>
 </resources>
