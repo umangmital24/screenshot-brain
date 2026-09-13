@@ -43,9 +43,20 @@ function screenshotPermission() {
     : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE
 }
 
+function notificationPermission() {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 33) return null
+  return PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+}
+
 async function hasScreenshotMediaAccess() {
   const permission = screenshotPermission()
   if (!permission) return false
+  return PermissionsAndroid.check(permission)
+}
+
+async function hasNotificationAccess() {
+  const permission = notificationPermission()
+  if (!permission) return true
   return PermissionsAndroid.check(permission)
 }
 
@@ -105,6 +116,7 @@ export default function DashboardScreenV2() {
   const [bubbleVisible, setBubbleVisible] = useState(false)
   const [nativeShot, setNativeShot] = useState(false)
   const [mediaAccess, setMediaAccess] = useState(false)
+  const [notificationAccess, setNotificationAccess] = useState(false)
   const [setupVisible, setSetupVisible] = useState(false)
   const [previewImageUri, setPreviewImageUri] = useState(null)
   const [accountVisible, setAccountVisible] = useState(false)
@@ -136,8 +148,14 @@ export default function DashboardScreenV2() {
   }, [])
 
   const refreshNative = useCallback(async () => {
-    setNativeShot(await isNativeScreenshotDetectionEnabled())
-    setMediaAccess(await hasScreenshotMediaAccess())
+    const [enabled, media, notifications] = await Promise.all([
+      isNativeScreenshotDetectionEnabled(),
+      hasScreenshotMediaAccess(),
+      hasNotificationAccess(),
+    ])
+    setNativeShot(enabled)
+    setMediaAccess(media)
+    setNotificationAccess(notifications)
   }, [])
 
   useEffect(() => { refreshBubble(true); refreshNative() }, [refreshBubble, refreshNative])
@@ -183,17 +201,49 @@ export default function DashboardScreenV2() {
   }
 
   async function toggleScreenshotSuggestions() {
-    if (!bubbleEnabled) return setSetupVisible(true)
-    if (nativeShot) { setNativeScreenshotDetectionEnabled(false); setNativeShot(false); return }
+    if (nativeShot) {
+      setNativeScreenshotDetectionEnabled(false)
+      setNativeShot(false)
+      return
+    }
+
     let access = mediaAccess || await hasScreenshotMediaAccess()
     if (!access) {
       const permission = screenshotPermission()
-      const result = await PermissionsAndroid.request(permission, { title: 'Allow screenshot suggestions', message: 'Samhaal needs photo access only to notice newly created screenshots.', buttonPositive: 'Allow', buttonNegative: 'Not now' })
+      if (!permission) return
+      const result = await PermissionsAndroid.request(permission, {
+        title: 'Allow screenshot suggestions',
+        message: 'Samhaal needs photo access only to notice newly created screenshots.',
+        buttonPositive: 'Allow',
+        buttonNegative: 'Not now',
+      })
       access = result === PermissionsAndroid.RESULTS.GRANTED
       setMediaAccess(access)
     }
-    if (!access) return
-    setNativeScreenshotDetectionEnabled(true); setNativeShot(true)
+    if (!access) {
+      Alert.alert('Photo access is required', 'Samhaal needs access to notice screenshots created by Android. The Save Bubble remains optional.')
+      return
+    }
+
+    let notices = notificationAccess || await hasNotificationAccess()
+    if (!notices) {
+      const permission = notificationPermission()
+      const result = await PermissionsAndroid.request(permission, {
+        title: 'Allow Samhaal prompts',
+        message: 'Samhaal uses a notification with Save to Samhaal and Ignore after you take a normal screenshot.',
+        buttonPositive: 'Allow',
+        buttonNegative: 'Not now',
+      })
+      notices = result === PermissionsAndroid.RESULTS.GRANTED
+      setNotificationAccess(notices)
+    }
+    if (!notices) {
+      Alert.alert('Notifications are required', 'Without notification permission Samhaal cannot show the Save to Samhaal prompt after a normal screenshot.')
+      return
+    }
+
+    setNativeScreenshotDetectionEnabled(true)
+    setNativeShot(true)
   }
 
   function confirmDelete(memory) {
@@ -221,6 +271,8 @@ export default function DashboardScreenV2() {
     () => selectedCategory === 'All' ? memories : memories.filter((memory) => memory.category?.trim() === selectedCategory),
     [memories, selectedCategory],
   )
+
+  const screenshotSuggestionsReady = nativeShot && mediaAccess && notificationAccess
 
   return (
     <View style={styles.screen}>
@@ -254,17 +306,17 @@ export default function DashboardScreenV2() {
 
             <TouchableOpacity style={styles.actionCard} onPress={handleBubble} activeOpacity={0.86}>
               <View style={styles.roundIcon}><Ionicons name="sparkles" size={20} color={colors.text} /></View>
-              <View style={{ flex: 1 }}><View style={styles.actionTitleRow}><Text style={styles.actionTitle}>Save Bubble</Text><View style={[styles.dot, bubbleEnabled && bubbleVisible && styles.dotOn]} /></View><Text style={styles.actionCopy}>{!bubbleEnabled ? 'Off · enable once in Android Accessibility settings.' : bubbleVisible ? 'On · tap the bubble anywhere to save.' : 'Hidden · tap here to show it again.'}</Text></View>
+              <View style={{ flex: 1 }}><View style={styles.actionTitleRow}><Text style={styles.actionTitle}>Save Bubble</Text><View style={[styles.dot, bubbleEnabled && bubbleVisible && styles.dotOn]} /></View><Text style={styles.actionCopy}>{!bubbleEnabled ? 'Optional · requires Android Accessibility.' : bubbleVisible ? 'On · tap the bubble anywhere to save without adding a Gallery screenshot.' : 'Hidden · tap here to show it again.'}</Text></View>
               <Ionicons name="chevron-forward" size={21} color={colors.textFaint} />
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.actionCard} onPress={toggleScreenshotSuggestions} activeOpacity={0.86}>
               <View style={styles.squareIcon}><Ionicons name="scan-outline" size={21} color={colors.text} /></View>
-              <View style={{ flex: 1 }}><Text style={styles.actionTitle}>Screenshot suggestions</Text><Text style={styles.actionCopy}>{!bubbleEnabled ? 'Enable Samhaal access first.' : nativeShot && mediaAccess ? 'On · choose Save to Samhaal or Ignore after a screenshot.' : 'Off · ask before saving normal screenshots.'}</Text></View>
-              <View style={[styles.switchTrack, nativeShot && mediaAccess && styles.switchTrackOn]}><View style={[styles.switchKnob, nativeShot && mediaAccess && styles.switchKnobOn]} /></View>
+              <View style={{ flex: 1 }}><Text style={styles.actionTitle}>Screenshot suggestions</Text><Text style={styles.actionCopy}>{screenshotSuggestionsReady ? 'On · take a normal screenshot and choose Save to Samhaal or Ignore from the prompt.' : 'Off · works without Accessibility. Uses photo access + notifications only.'}</Text></View>
+              <View style={[styles.switchTrack, screenshotSuggestionsReady && styles.switchTrackOn]}><View style={[styles.switchKnob, screenshotSuggestionsReady && styles.switchKnobOn]} /></View>
             </TouchableOpacity>
 
-            <View style={styles.privacyRow}><Ionicons name="shield-checkmark-outline" size={17} color={colors.textMuted} /><Text style={styles.privacyText}>Raw screenshots stay on your device. OCR runs on-device; only derived memory text is sent to Samhaal.</Text></View>
+            <View style={styles.privacyRow}><Ionicons name="shield-checkmark-outline" size={17} color={colors.textMuted} /><Text style={styles.privacyText}>Normal screenshot suggestions do not need Accessibility. OCR runs on-device; only derived memory text is sent to Samhaal.</Text></View>
             <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Your memories</Text><Text style={styles.count}>{selectedCategory === 'All' ? memories.length : `${data.length}/${memories.length}`}</Text></View>
             {categories.length > 1 ? (
               <FlatList
@@ -276,11 +328,7 @@ export default function DashboardScreenV2() {
                 renderItem={({ item }) => {
                   const active = selectedCategory === item
                   return (
-                    <TouchableOpacity
-                      style={[styles.filterChip, active && styles.filterChipActive]}
-                      onPress={() => setSelectedCategory(item)}
-                      activeOpacity={0.82}
-                    >
+                    <TouchableOpacity style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => setSelectedCategory(item)} activeOpacity={0.82}>
                       <Text style={[styles.filterChipText, active && styles.filterChipTextActive]} numberOfLines={1}>{item}</Text>
                     </TouchableOpacity>
                   )
