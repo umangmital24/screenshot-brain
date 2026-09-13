@@ -12,6 +12,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
@@ -31,14 +32,7 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 
-/**
- * Accessibility-free screenshot suggestions.
- *
- * This foreground service watches MediaStore after the user explicitly enables the feature.
- * When Android saves a normal screenshot, Samhaal posts a heads-up notification with
- * "Save to Samhaal" and "Ignore" actions. No Accessibility service is required.
- * The screenshot remains in Gallery; OCR runs on-device and only derived memory data is queued.
- */
+/** Accessibility-free screenshot suggestions. */
 class ScreenshotMonitorService : Service() {
   companion object {
     const val PREFS = "samhaal_screenshot_monitor"
@@ -59,16 +53,11 @@ class ScreenshotMonitorService : Service() {
 
     fun setEnabled(context: Context, enabled: Boolean) {
       context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, enabled).apply()
-      // Prevent the old Accessibility-coupled watcher from running in parallel.
       context.getSharedPreferences(LEGACY_PREFS, Context.MODE_PRIVATE).edit().putBoolean(LEGACY_KEY_ENABLED, false).apply()
-
       val intent = Intent(context, ScreenshotMonitorService::class.java)
       if (enabled) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
-        else context.startService(intent)
-      } else {
-        context.stopService(intent)
-      }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
+      } else context.stopService(intent)
     }
   }
 
@@ -88,28 +77,19 @@ class ScreenshotMonitorService : Service() {
     when (intent?.action) {
       ACTION_SAVE -> {
         val uri = intent.getStringExtra(EXTRA_URI)?.let(Uri::parse)
-        notificationManager().cancel(PROMPT_NOTIFICATION_ID)
         if (uri != null) {
-          Toast.makeText(this, "Saved to Samhaal · processing in background", Toast.LENGTH_SHORT).show()
+          showProcessingNotification()
           processScreenshot(uri)
         }
       }
       ACTION_IGNORE -> notificationManager().cancel(PROMPT_NOTIFICATION_ID)
     }
-
-    if (!isEnabled(this)) {
-      stopSelf()
-      return START_NOT_STICKY
-    }
+    if (!isEnabled(this)) { stopSelf(); return START_NOT_STICKY }
     startWatching()
     return START_STICKY
   }
 
-  override fun onDestroy() {
-    stopWatching()
-    super.onDestroy()
-  }
-
+  override fun onDestroy() { stopWatching(); super.onDestroy() }
   override fun onBind(intent: Intent?): IBinder? = null
 
   private fun startWatching() {
@@ -130,32 +110,15 @@ class ScreenshotMonitorService : Service() {
   }
 
   private fun hasPhotoPermission(): Boolean {
-    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      Manifest.permission.READ_MEDIA_IMAGES
-    } else {
-      Manifest.permission.READ_EXTERNAL_STORAGE
-    }
+    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
     return checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
   }
 
   private fun inspectLatestScreenshot() {
     if (!isEnabled(this) || !hasPhotoPermission()) return
-    val projection = arrayOf(
-      MediaStore.Images.Media._ID,
-      MediaStore.Images.Media.DISPLAY_NAME,
-      MediaStore.Images.Media.RELATIVE_PATH,
-      MediaStore.Images.Media.DATE_ADDED,
-      MediaStore.Images.Media.DATE_MODIFIED,
-    )
-
+    val projection = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME, MediaStore.Images.Media.RELATIVE_PATH, MediaStore.Images.Media.DATE_ADDED, MediaStore.Images.Media.DATE_MODIFIED)
     runCatching {
-      contentResolver.query(
-        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-        projection,
-        null,
-        null,
-        "${MediaStore.Images.Media.DATE_ADDED} DESC",
-      )?.use { cursor ->
+      contentResolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, null, null, "${MediaStore.Images.Media.DATE_ADDED} DESC")?.use { cursor ->
         if (!cursor.moveToFirst()) return@use
         val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID))
         val name = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)).orEmpty()
@@ -164,12 +127,10 @@ class ScreenshotMonitorService : Service() {
         val modified = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_MODIFIED))
         val timestampMs = maxOf(added, modified) * 1000L
         if (System.currentTimeMillis() - timestampMs > 20_000L || !looksLikeScreenshot(name, path)) return@use
-
         val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
         val now = System.currentTimeMillis()
         if (uri.toString() == lastPromptedUri && now - lastPromptedAt < 30_000L) return@use
-        lastPromptedUri = uri.toString()
-        lastPromptedAt = now
+        lastPromptedUri = uri.toString(); lastPromptedAt = now
         showPrompt(uri)
       }
     }
@@ -182,30 +143,76 @@ class ScreenshotMonitorService : Service() {
   }
 
   private fun showPrompt(uri: Uri) {
-    val saveIntent = Intent(this, ScreenshotMonitorService::class.java).apply {
-      action = ACTION_SAVE
-      putExtra(EXTRA_URI, uri.toString())
-    }
-    val ignoreIntent = Intent(this, ScreenshotMonitorService::class.java).apply {
-      action = ACTION_IGNORE
-      putExtra(EXTRA_URI, uri.toString())
-    }
-    val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    val savePending = PendingIntent.getService(this, 61021, saveIntent, flags)
-    val ignorePending = PendingIntent.getService(this, 61022, ignoreIntent, flags)
+    Thread {
+      val preview = decodePreview(uri)
+      handler.post {
+        val saveIntent = Intent(this, ScreenshotMonitorService::class.java).apply { action = ACTION_SAVE; putExtra(EXTRA_URI, uri.toString()) }
+        val ignoreIntent = Intent(this, ScreenshotMonitorService::class.java).apply { action = ACTION_IGNORE; putExtra(EXTRA_URI, uri.toString()) }
+        val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val savePending = PendingIntent.getService(this, 61021, saveIntent, pendingFlags)
+        val ignorePending = PendingIntent.getService(this, 61022, ignoreIntent, pendingFlags)
 
+        val builder = Notification.Builder(this, CHANNEL_PROMPTS)
+          .setSmallIcon(R.drawable.samhaal_leaf_foreground)
+          .setContentTitle("Keep this memory?")
+          .setContentText("Save it now so you can find it later.")
+          .setSubText("Samhaal")
+          .setColor(Color.BLACK)
+          .setPriority(Notification.PRIORITY_HIGH)
+          .setCategory(Notification.CATEGORY_RECOMMENDATION)
+          .setVisibility(Notification.VISIBILITY_SECRET)
+          .setAutoCancel(true)
+          .addAction(Notification.Action.Builder(null, "Save to Samhaal", savePending).build())
+          .addAction(Notification.Action.Builder(null, "Ignore", ignorePending).build())
+
+        if (preview != null) {
+          builder.setLargeIcon(preview)
+          builder.setStyle(Notification.BigPictureStyle().bigPicture(preview).setSummaryText("Screenshot captured · choose whether Samhaal should remember it."))
+        } else {
+          builder.setStyle(Notification.BigTextStyle().bigText("Screenshot captured. Save it to Samhaal now so you can find the exact memory later, or ignore it."))
+        }
+        notificationManager().notify(PROMPT_NOTIFICATION_ID, builder.build())
+      }
+    }.start()
+  }
+
+  private fun decodePreview(uri: Uri): Bitmap? = try {
+    val source = ImageDecoder.createSource(contentResolver, uri)
+    ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+      decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+      val maxSide = maxOf(info.size.width, info.size.height)
+      if (maxSide > 720) {
+        val scale = 720f / maxSide.toFloat()
+        decoder.setTargetSize((info.size.width * scale).toInt().coerceAtLeast(1), (info.size.height * scale).toInt().coerceAtLeast(1))
+      }
+    }
+  } catch (_: Exception) { null }
+
+  private fun showProcessingNotification() {
     val notification = Notification.Builder(this, CHANNEL_PROMPTS)
-      .setSmallIcon(R.mipmap.ic_launcher)
-      .setContentTitle("Save screenshot to Samhaal?")
-      .setContentText("Make this screenshot searchable later.")
-      .setStyle(Notification.BigTextStyle().bigText("Save makes it searchable later. Ignore leaves it only in your Gallery."))
-      .setPriority(Notification.PRIORITY_HIGH)
-      .setCategory(Notification.CATEGORY_RECOMMENDATION)
-      .setAutoCancel(true)
-      .addAction(Notification.Action.Builder(null, "Ignore", ignorePending).build())
-      .addAction(Notification.Action.Builder(null, "Save to Samhaal", savePending).build())
+      .setSmallIcon(R.drawable.samhaal_leaf_foreground)
+      .setContentTitle("Remembering this…")
+      .setContentText("Reading the useful details on your device.")
+      .setSubText("Samhaal")
+      .setColor(Color.BLACK)
+      .setVisibility(Notification.VISIBILITY_PRIVATE)
+      .setProgress(0, 0, true)
+      .setOngoing(true)
       .build()
+    notificationManager().notify(PROMPT_NOTIFICATION_ID, notification)
+  }
 
+  private fun showSavedNotification() {
+    val notification = Notification.Builder(this, CHANNEL_PROMPTS)
+      .setSmallIcon(R.drawable.samhaal_leaf_foreground)
+      .setContentTitle("Remembered ✓")
+      .setContentText("Saved to Samhaal. Ready to find after processing.")
+      .setSubText("Samhaal")
+      .setColor(Color.BLACK)
+      .setVisibility(Notification.VISIBILITY_PRIVATE)
+      .setAutoCancel(true)
+      .setTimeoutAfter(5000)
+      .build()
     notificationManager().notify(PROMPT_NOTIFICATION_ID, notification)
   }
 
@@ -222,7 +229,7 @@ class ScreenshotMonitorService : Service() {
           }
         }
       } catch (_: Exception) {
-        handler.post { Toast.makeText(this, "Could not read that screenshot.", Toast.LENGTH_SHORT).show() }
+        handler.post { notificationManager().cancel(PROMPT_NOTIFICATION_ID); Toast.makeText(this, "Could not read that screenshot.", Toast.LENGTH_SHORT).show() }
         return@Thread
       }
 
@@ -231,29 +238,19 @@ class ScreenshotMonitorService : Service() {
         .addOnSuccessListener { result ->
           val text = result.text.trim()
           val blocks = buildOcrBlocksJson(result.textBlocks, bitmap.width, bitmap.height)
-          recognizer.close()
-          bitmap.recycle()
+          recognizer.close(); bitmap.recycle()
           if (text.isBlank()) {
+            notificationManager().cancel(PROMPT_NOTIFICATION_ID)
             Toast.makeText(this, "No readable text found in this screenshot.", Toast.LENGTH_SHORT).show()
             return@addOnSuccessListener
           }
           runCatching {
-            UploadHeadlessTaskService.enqueueText(
-              this,
-              text,
-              UUID.randomUUID().toString(),
-              isoNow(),
-              uri.toString(),
-              "Android screenshot",
-              blocks,
-            )
-          }.onFailure {
-            Toast.makeText(this, "Could not queue this screenshot for Samhaal.", Toast.LENGTH_SHORT).show()
-          }
+            UploadHeadlessTaskService.enqueueText(this, text, UUID.randomUUID().toString(), isoNow(), uri.toString(), "Android screenshot", blocks)
+          }.onSuccess { showSavedNotification() }
+            .onFailure { notificationManager().cancel(PROMPT_NOTIFICATION_ID); Toast.makeText(this, "Could not queue this screenshot for Samhaal.", Toast.LENGTH_SHORT).show() }
         }
         .addOnFailureListener {
-          recognizer.close()
-          bitmap.recycle()
+          recognizer.close(); bitmap.recycle(); notificationManager().cancel(PROMPT_NOTIFICATION_ID)
           Toast.makeText(this, "Could not read this screenshot.", Toast.LENGTH_SHORT).show()
         }
     }.start()
@@ -265,11 +262,7 @@ class ScreenshotMonitorService : Service() {
     blocks.take(120).forEach { block ->
       val box = block.boundingBox ?: return@forEach
       array.put(JSONObject().apply {
-        put("text", block.text.take(1200))
-        put("left", box.left.toDouble() / imageWidth)
-        put("top", box.top.toDouble() / imageHeight)
-        put("width", box.width().toDouble() / imageWidth)
-        put("height", box.height().toDouble() / imageHeight)
+        put("text", block.text.take(1200)); put("left", box.left.toDouble() / imageWidth); put("top", box.top.toDouble() / imageHeight); put("width", box.width().toDouble() / imageWidth); put("height", box.height().toDouble() / imageHeight)
       })
     }
     return array.toString()
@@ -277,31 +270,26 @@ class ScreenshotMonitorService : Service() {
 
   private fun createChannels() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-    notificationManager().createNotificationChannel(
-      NotificationChannel(CHANNEL_SERVICE, "Screenshot suggestions", NotificationManager.IMPORTANCE_LOW).apply {
-        description = "Keeps screenshot detection available when Samhaal is in the background."
-        setShowBadge(false)
-      },
-    )
-    notificationManager().createNotificationChannel(
-      NotificationChannel(CHANNEL_PROMPTS, "Screenshot save prompts", NotificationManager.IMPORTANCE_HIGH).apply {
-        description = "Ask whether a new Android screenshot should be saved to Samhaal."
-      },
-    )
+    notificationManager().createNotificationChannel(NotificationChannel(CHANNEL_SERVICE, "Screenshot suggestions", NotificationManager.IMPORTANCE_LOW).apply {
+      description = "Keeps screenshot detection available when Samhaal is in the background."; setShowBadge(false)
+    })
+    notificationManager().createNotificationChannel(NotificationChannel(CHANNEL_PROMPTS, "Screenshot save prompts", NotificationManager.IMPORTANCE_HIGH).apply {
+      description = "Ask whether a new Android screenshot should be saved to Samhaal."
+      lockscreenVisibility = Notification.VISIBILITY_SECRET
+    })
   }
 
-  private fun serviceNotification(): Notification {
-    return Notification.Builder(this, CHANNEL_SERVICE)
-      .setSmallIcon(R.mipmap.ic_launcher)
-      .setContentTitle("Samhaal screenshot suggestions are on")
-      .setContentText("Take a normal screenshot and Samhaal will ask before saving it.")
-      .setOngoing(true)
-      .setCategory(Notification.CATEGORY_SERVICE)
-      .build()
-  }
+  private fun serviceNotification(): Notification = Notification.Builder(this, CHANNEL_SERVICE)
+    .setSmallIcon(R.drawable.samhaal_leaf_foreground)
+    .setContentTitle("Screenshot suggestions are on")
+    .setContentText("Samhaal will ask when you take a normal screenshot.")
+    .setSubText("Samhaal")
+    .setColor(Color.BLACK)
+    .setOngoing(true)
+    .setCategory(Notification.CATEGORY_SERVICE)
+    .build()
 
   private fun notificationManager() = getSystemService(NotificationManager::class.java)
-
   private fun isoNow(): String {
     val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
     formatter.timeZone = TimeZone.getTimeZone("UTC")
