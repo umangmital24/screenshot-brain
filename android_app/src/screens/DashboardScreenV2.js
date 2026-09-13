@@ -111,6 +111,7 @@ export default function DashboardScreenV2() {
   const [accountEmail, setAccountEmail] = useState('')
   const [uploadQueue, setUploadQueue] = useState([])
   const [importing, setImporting] = useState(false)
+  const [selectedCategory, setSelectedCategory] = useState('All')
   const awaitingSettingsReturn = useRef(false)
 
   const load = useCallback(async (full = true) => {
@@ -207,7 +208,19 @@ export default function DashboardScreenV2() {
     setAccountVisible(true)
   }
 
-  const data = useMemo(() => memories, [memories])
+  const categories = useMemo(() => {
+    const unique = [...new Set(memories.map((memory) => memory.category?.trim()).filter(Boolean))]
+    return ['All', ...unique.sort((a, b) => a.localeCompare(b))]
+  }, [memories])
+
+  useEffect(() => {
+    if (!categories.includes(selectedCategory)) setSelectedCategory('All')
+  }, [categories, selectedCategory])
+
+  const data = useMemo(
+    () => selectedCategory === 'All' ? memories : memories.filter((memory) => memory.category?.trim() === selectedCategory),
+    [memories, selectedCategory],
+  )
 
   return (
     <View style={styles.screen}>
@@ -252,10 +265,31 @@ export default function DashboardScreenV2() {
             </TouchableOpacity>
 
             <View style={styles.privacyRow}><Ionicons name="shield-checkmark-outline" size={17} color={colors.textMuted} /><Text style={styles.privacyText}>Raw screenshots stay on your device. OCR runs on-device; only derived memory text is sent to Samhaal.</Text></View>
-            <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Your memories</Text><Text style={styles.count}>{memories.length}</Text></View>
+            <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Your memories</Text><Text style={styles.count}>{selectedCategory === 'All' ? memories.length : `${data.length}/${memories.length}`}</Text></View>
+            {categories.length > 1 ? (
+              <FlatList
+                horizontal
+                data={categories}
+                keyExtractor={(item) => item}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterList}
+                renderItem={({ item }) => {
+                  const active = selectedCategory === item
+                  return (
+                    <TouchableOpacity
+                      style={[styles.filterChip, active && styles.filterChipActive]}
+                      onPress={() => setSelectedCategory(item)}
+                      activeOpacity={0.82}
+                    >
+                      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]} numberOfLines={1}>{item}</Text>
+                    </TouchableOpacity>
+                  )
+                }}
+              />
+            ) : null}
           </>
         }
-        ListEmptyComponent={loading ? <ActivityIndicator color={colors.black} style={{ marginTop: 64 }} /> : <View style={styles.empty}><Text style={styles.emptyTitle}>No memories yet.</Text><Text style={styles.emptyCopy}>Take a screenshot, use the Save Bubble, or upload existing screenshots.</Text></View>}
+        ListEmptyComponent={loading ? <ActivityIndicator color={colors.black} style={{ marginTop: 64 }} /> : <View style={styles.empty}><Text style={styles.emptyTitle}>{selectedCategory === 'All' ? 'No memories yet.' : `No ${selectedCategory} memories yet.`}</Text><Text style={styles.emptyCopy}>{selectedCategory === 'All' ? 'Take a screenshot, use the Save Bubble, or upload existing screenshots.' : 'Choose another category or save more screenshots.'}</Text></View>}
         ListFooterComponent={<View style={{ height: 32 }} />}
       />
 
@@ -308,9 +342,14 @@ const styles = StyleSheet.create({
   switchKnobOn: { alignSelf: 'flex-end' },
   privacyRow: { marginTop: 15, flexDirection: 'row', gap: 8, alignItems: 'flex-start', paddingHorizontal: 2 },
   privacyText: { flex: 1, fontSize: 11.5, lineHeight: 17, color: colors.textFaint },
-  sectionRow: { marginTop: 34, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sectionRow: { marginTop: 34, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 15.5, fontWeight: '700', color: colors.text },
   count: { fontSize: 12, color: colors.textFaint },
+  filterList: { gap: 8, paddingBottom: 14, paddingRight: 20 },
+  filterChip: { minHeight: 36, maxWidth: 160, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  filterChipActive: { backgroundColor: colors.black, borderColor: colors.black },
+  filterChipText: { fontSize: 12.5, fontWeight: '600', color: colors.textSecondary },
+  filterChipTextActive: { color: colors.white },
   memoryCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: 18, padding: 16, overflow: 'hidden' },
   imageWrap: { height: 170, borderRadius: 14, overflow: 'hidden', marginBottom: 14, backgroundColor: colors.surfaceMuted },
   memoryImage: { width: '100%', height: '100%' },
