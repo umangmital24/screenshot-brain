@@ -1,25 +1,25 @@
-// Samhaal mobile design system — mirrors the landing page: white canvas,
-// deep black type, architectural 1px borders and restrained motion/accent.
+// Samhaal mobile design system — the app itself stays deliberately monochrome.
+// Marketing artwork may use accent shapes, but in-product UI is black, white and neutral gray.
 export const colors = {
   canvas: '#FFFFFF',
   surface: '#FFFFFF',
-  surfaceMuted: '#F8FAFC',
-  surfaceActive: '#F1F5F9',
+  surfaceMuted: '#F7F7F8',
+  surfaceActive: '#F1F1F2',
   text: '#09090B',
-  textSecondary: '#52525B',
-  textMuted: '#71717A',
-  textFaint: '#A1A1AA',
-  border: 'rgba(0,0,0,0.10)',
-  borderSubtle: 'rgba(0,0,0,0.06)',
+  textSecondary: '#5F6068',
+  textMuted: '#7C7D86',
+  textFaint: '#A8A9B0',
+  border: 'rgba(9,9,11,0.14)',
+  borderSubtle: 'rgba(9,9,11,0.08)',
   black: '#09090B',
   white: '#FFFFFF',
-  success: '#16A34A',
+  success: '#09090B',
   danger: '#DC2626',
 
-  // Backwards-compatible aliases used by a few native/legacy components.
+  // Backwards-compatible aliases used by native/legacy components.
   ink: '#FFFFFF',
   inkDeep: '#09090B',
-  inkRaised: '#F8FAFC',
+  inkRaised: '#F7F7F8',
   cardStock: '#FFFFFF',
   cardStockShadow: '#F4F4F5',
   brass: '#09090B',
@@ -27,9 +27,9 @@ export const colors = {
   teal: '#09090B',
   tealBright: '#27272A',
   textPage: '#09090B',
-  textPageDim: '#71717A',
+  textPageDim: '#7C7D86',
   textCard: '#09090B',
-  textCardDim: '#71717A',
+  textCardDim: '#7C7D86',
 }
 
 export const intentMeta = {
