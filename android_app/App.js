@@ -103,7 +103,7 @@ export default function App() {
     return (
       <>
         <SplashScreen onDone={() => setSplashDone(true)} />
-        <StatusBar style="dark" />
+        <StatusBar style="dark" backgroundColor={colors.canvas} />
       </>
     )
   }
@@ -120,7 +120,7 @@ export default function App() {
     return (
       <ShareIntentProvider>
         <LoginScreen recoveryMode={recoveryMode} onRecoveryComplete={() => setRecoveryMode(false)} />
-        <StatusBar style="dark" />
+        <StatusBar style="dark" backgroundColor={colors.canvas} />
       </ShareIntentProvider>
     )
   }
@@ -128,7 +128,7 @@ export default function App() {
   return (
     <ShareIntentProvider>
       <NavigationContainer theme={navTheme}>
-        <StatusBar style="dark" />
+        <StatusBar style="dark" backgroundColor={colors.canvas} />
         <ShareIntentHandler />
         <Tab.Navigator
           screenOptions={{
@@ -141,20 +141,22 @@ export default function App() {
               backgroundColor: colors.surface,
               borderTopWidth: 1,
               borderTopColor: colors.borderSubtle,
-              height: Platform.OS === 'ios' ? 84 : 66,
-              paddingTop: 7,
-              paddingBottom: Platform.OS === 'ios' ? 27 : 9,
+              height: Platform.OS === 'ios' ? 86 : 72,
+              paddingTop: 8,
+              paddingBottom: Platform.OS === 'ios' ? 27 : 10,
               elevation: 0,
+              shadowOpacity: 0,
             },
-            tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+            tabBarItemStyle: { paddingVertical: 1 },
+            tabBarLabelStyle: { fontSize: 11.5, lineHeight: 15, fontWeight: '500' },
           }}
         >
           <Tab.Screen
             name="Memories"
             component={DashboardScreen}
             options={{
-              tabBarIcon: ({ color, focused, size }) => (
-                <Ionicons name={focused ? 'albums' : 'albums-outline'} color={color} size={size ?? 23} />
+              tabBarIcon: ({ color, focused }) => (
+                <Ionicons name={focused ? 'archive' : 'archive-outline'} color={color} size={24} />
               ),
             }}
           />
@@ -162,8 +164,8 @@ export default function App() {
             name="Ask"
             component={ChatScreen}
             options={{
-              tabBarIcon: ({ color, focused, size }) => (
-                <Ionicons name={focused ? 'sparkles' : 'sparkles-outline'} color={color} size={size ?? 23} />
+              tabBarIcon: ({ color, focused }) => (
+                <Ionicons name={focused ? 'sparkles' : 'sparkles-outline'} color={color} size={25} />
               ),
             }}
           />
