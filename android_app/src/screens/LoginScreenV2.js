@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native'
 import { GoogleSignin } from '@react-native-google-signin/google-signin'
 import { FontAwesome, Ionicons } from '@expo/vector-icons'
 import { supabase } from '../supabaseClient'
@@ -7,6 +7,12 @@ import { colors } from '../theme'
 
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim() || '295083436259-48boa1abgmoq9jla0nr58rhmh6v06if0.apps.googleusercontent.com'
 GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID, offlineAccess: false })
+
+const MINI_IMAGES = {
+  mountain: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=420&q=88',
+  shoe: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=420&q=88',
+  coffee: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=420&q=88',
+}
 
 function SamhaalLogo({ size = 82 }) {
   return (
@@ -25,15 +31,15 @@ function MemoryCollage() {
   return (
     <View style={styles.collage}>
       <View style={[styles.memoryCard, styles.travelCard]}>
-        <View style={styles.mountainArt}><Ionicons name="image-outline" size={31} color="#111111" /></View>
+        <Image source={{ uri: MINI_IMAGES.mountain }} style={styles.photo} resizeMode="cover" />
         <Text style={styles.cardCaption}>Mountain trip</Text>
       </View>
       <View style={[styles.memoryCard, styles.shoeCard]}>
-        <Ionicons name="footsteps-outline" size={37} color="#111111" />
+        <Image source={{ uri: MINI_IMAGES.shoe }} style={styles.photo} resizeMode="cover" />
         <Text style={styles.cardCaption}>Nike Pegasus 41</Text>
       </View>
       <View style={[styles.memoryCard, styles.coffeeCard]}>
-        <Ionicons name="cafe-outline" size={35} color="#111111" />
+        <Image source={{ uri: MINI_IMAGES.coffee }} style={styles.photo} resizeMode="cover" />
         <Text style={styles.cardCaption}>Blue Tokai</Text>
       </View>
       <View style={[styles.memoryCard, styles.codeCard]}>
@@ -151,13 +157,13 @@ const styles = StyleSheet.create({
   title: { marginTop: 24, textAlign: 'center', fontSize: 30, lineHeight: 33, letterSpacing: -1.05, fontWeight: '800', color: '#080808' },
   subtitle: { marginTop: 10, fontSize: 16, color: '#777B86', textAlign: 'center' },
   collage: { alignSelf: 'center', width: 290, height: 166, marginTop: 22, position: 'relative' },
-  memoryCard: { position: 'absolute', borderRadius: 10, borderWidth: 1, borderColor: '#ECECEC', backgroundColor: '#FFFFFF', padding: 8, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
-  travelCard: { width: 112, height: 88, left: 22, top: 4, transform: [{ rotate: '-8deg' }] },
-  shoeCard: { width: 102, height: 82, right: 24, top: 9, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '6deg' }] },
-  coffeeCard: { width: 96, height: 74, left: 7, bottom: 5, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '5deg' }] },
-  codeCard: { width: 116, height: 80, left: 91, top: 72, backgroundColor: '#0A0A0A', borderColor: '#0A0A0A', transform: [{ rotate: '-2deg' }], zIndex: 4 },
-  ideaCard: { width: 105, height: 82, right: 0, bottom: 0, transform: [{ rotate: '4deg' }], zIndex: 3 },
-  mountainArt: { flex: 1, backgroundColor: '#F3F3F3', borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  memoryCard: { position: 'absolute', borderRadius: 10, borderWidth: 1, borderColor: '#ECECEC', backgroundColor: '#FFFFFF', padding: 6, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
+  travelCard: { width: 112, height: 90, left: 22, top: 4, transform: [{ rotate: '-8deg' }] },
+  shoeCard: { width: 102, height: 84, right: 24, top: 9, transform: [{ rotate: '6deg' }] },
+  coffeeCard: { width: 96, height: 76, left: 7, bottom: 5, transform: [{ rotate: '5deg' }] },
+  codeCard: { width: 116, height: 80, left: 91, top: 72, backgroundColor: '#0A0A0A', borderColor: '#0A0A0A', transform: [{ rotate: '-2deg' }], zIndex: 4, padding: 8 },
+  ideaCard: { width: 105, height: 82, right: 0, bottom: 0, transform: [{ rotate: '4deg' }], zIndex: 3, padding: 8 },
+  photo: { width: '100%', flex: 1, borderRadius: 6, backgroundColor: '#F2F2F2' },
   cardCaption: { fontSize: 8.5, marginTop: 4, fontWeight: '700', color: '#111111' },
   codeText: { fontSize: 8.5, lineHeight: 13, color: '#FFFFFF', fontFamily: Platform.OS === 'android' ? 'monospace' : 'Courier' },
   ideaTitle: { fontSize: 9.5, fontWeight: '800', color: '#111111', marginBottom: 4 },
