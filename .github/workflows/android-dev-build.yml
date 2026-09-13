@@ -59,12 +59,12 @@ jobs:
           test -n "$EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID"
           echo "$EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID" | grep -Eq '^[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$' || (echo "GOOGLE_WEB_CLIENT_ID must be a Web OAuth client ID" && exit 1)
 
-      - name: Build development APK
-        run: ./android/gradlew -p android assembleDebug --no-daemon --stacktrace
+      - name: Build lightweight live-preview APK
+        run: ./android/gradlew -p android assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon --stacktrace
 
-      - name: Upload development APK
+      - name: Upload live-preview APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: samhaal-dev-apk
+          name: samhaal-live-preview-arm64-apk
           path: android_app/android/app/build/outputs/apk/debug/app-debug.apk
