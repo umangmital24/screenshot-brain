@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image, Modal } from 'react-native'
 import { GoogleSignin } from '@react-native-google-signin/google-signin'
-import { FontAwesome, Ionicons } from '@expo/vector-icons'
+import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../supabaseClient'
 import { colors } from '../theme'
 
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim() || '295083436259-48boa1abgmoq9jla0nr58rhmh6v06if0.apps.googleusercontent.com'
 GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID, offlineAccess: false })
 
+const GOOGLE_G = 'https://developers.google.com/identity/images/g-logo.png'
 const MINI_IMAGES = {
   mountain: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=420&q=88',
   shoe: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=420&q=88',
@@ -30,26 +31,51 @@ function PasswordField({ value, onChangeText, placeholder = 'Password' }) {
 function MemoryCollage() {
   return (
     <View style={styles.collage}>
-      <View style={[styles.memoryCard, styles.travelCard]}>
-        <Image source={{ uri: MINI_IMAGES.mountain }} style={styles.photo} resizeMode="cover" />
-        <Text style={styles.cardCaption}>Mountain trip</Text>
-      </View>
-      <View style={[styles.memoryCard, styles.shoeCard]}>
-        <Image source={{ uri: MINI_IMAGES.shoe }} style={styles.photo} resizeMode="cover" />
-        <Text style={styles.cardCaption}>Nike Pegasus 41</Text>
-      </View>
-      <View style={[styles.memoryCard, styles.coffeeCard]}>
-        <Image source={{ uri: MINI_IMAGES.coffee }} style={styles.photo} resizeMode="cover" />
-        <Text style={styles.cardCaption}>Blue Tokai</Text>
-      </View>
-      <View style={[styles.memoryCard, styles.codeCard]}>
-        <Text style={styles.codeText}>def main():{`\n`}  print("Hello"){`\n`}  return True</Text>
-      </View>
-      <View style={[styles.memoryCard, styles.ideaCard]}>
-        <Text style={styles.ideaTitle}>Project Ideas</Text>
-        <Text style={styles.ideaText}>□ Build habit tracker{`\n`}□ Explore LLMs{`\n`}□ Redesign portfolio</Text>
-      </View>
+      <View style={[styles.memoryCard, styles.travelCard]}><Image source={{ uri: MINI_IMAGES.mountain }} style={styles.photo} resizeMode="cover" /><Text style={styles.cardCaption}>Mountain trip</Text></View>
+      <View style={[styles.memoryCard, styles.shoeCard]}><Image source={{ uri: MINI_IMAGES.shoe }} style={styles.photo} resizeMode="cover" /><Text style={styles.cardCaption}>Nike Pegasus 41</Text></View>
+      <View style={[styles.memoryCard, styles.coffeeCard]}><Image source={{ uri: MINI_IMAGES.coffee }} style={styles.photo} resizeMode="cover" /><Text style={styles.cardCaption}>Blue Tokai</Text></View>
+      <View style={[styles.memoryCard, styles.codeCard]}><Text style={styles.codeText}>def main():{`\n`}  print("Hello"){`\n`}  return True</Text></View>
+      <View style={[styles.memoryCard, styles.ideaCard]}><Text style={styles.ideaTitle}>Project Ideas</Text><Text style={styles.ideaText}>□ Build habit tracker{`\n`}□ Explore LLMs{`\n`}□ Redesign portfolio</Text></View>
     </View>
+  )
+}
+
+const LEGAL = {
+  terms: {
+    title: 'Terms of Service',
+    body: [
+      ['Using Samhaal', 'Samhaal helps you turn screenshots into searchable memories. You are responsible for the content you choose to save and for having the right to use that content.'],
+      ['Your account', 'Keep your account credentials secure. Do not use Samhaal to store or process unlawful content or to interfere with other people’s rights.'],
+      ['Service availability', 'Samhaal is provided as an evolving product. Features may change, and we cannot guarantee uninterrupted availability or perfect extraction from every screenshot.'],
+      ['Your memories', 'You remain responsible for your screenshots and saved information. You can delete memories from Samhaal from the Memories screen.'],
+    ],
+  },
+  privacy: {
+    title: 'Privacy Policy',
+    body: [
+      ['What Samhaal processes', 'Samhaal uses your account information to sign you in. When you save a screenshot, OCR runs on your device and derived memory text is sent to Samhaal so it can be organised and searched.'],
+      ['Screenshots', 'Normal screenshots remain in your phone Gallery. Samhaal does not continuously read your screen. The optional Save Bubble uses Accessibility only when enabled and captures after you explicitly tap the bubble.'],
+      ['How information is used', 'Saved memory data is used to organise, retrieve and search the memories associated with your account. It is not used to provide unrelated personal-assistant recommendations.'],
+      ['Your control', 'You can ignore screenshot suggestions, disable screenshot monitoring, keep the Save Bubble off, and delete individual memories from Samhaal.'],
+    ],
+  },
+}
+
+function LegalModal({ type, onClose }) {
+  const doc = type ? LEGAL[type] : null
+  return (
+    <Modal visible={Boolean(doc)} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={styles.legalScreen}>
+        <View style={styles.legalHeader}>
+          <View><Text style={styles.legalBrand}>Samhaal संभाल</Text><Text style={styles.legalTitle}>{doc?.title}</Text></View>
+          <TouchableOpacity style={styles.legalClose} onPress={onClose}><Ionicons name="close" size={22} color={colors.text} /></TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={styles.legalBody} showsVerticalScrollIndicator={false}>
+          <Text style={styles.legalUpdated}>Effective September 2026</Text>
+          {doc?.body.map(([heading, body]) => <View key={heading} style={styles.legalSection}><Text style={styles.legalHeading}>{heading}</Text><Text style={styles.legalParagraph}>{body}</Text></View>)}
+        </ScrollView>
+      </View>
+    </Modal>
   )
 }
 
@@ -63,6 +89,7 @@ export default function LoginScreenV2({ recoveryMode = false, onRecoveryComplete
   const [submitting, setSubmitting] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [forgotLoading, setForgotLoading] = useState(false)
+  const [legalOpen, setLegalOpen] = useState(null)
 
   async function googleSignIn() {
     setMessage(null); setGoogleLoading(true)
@@ -122,17 +149,11 @@ export default function LoginScreenV2({ recoveryMode = false, onRecoveryComplete
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.brandRow}><Text style={styles.brand}>Samhaal</Text><Text style={styles.hindi}>संभाल</Text></View>
-
-        <View style={styles.hero}>
-          <SamhaalLogo />
-          <Text style={styles.title}>{recoveryMode ? 'Choose a new password.' : 'Turn your screenshots\ninto searchable\nmemories.'}</Text>
-          <Text style={styles.subtitle}>{recoveryMode ? 'Set a new password for your Samhaal account.' : 'Capture. Save. Find. Anytime.'}</Text>
-        </View>
-
+        <View style={styles.hero}><SamhaalLogo /><Text style={styles.title}>{recoveryMode ? 'Choose a new password.' : 'Turn your screenshots\ninto searchable\nmemories.'}</Text><Text style={styles.subtitle}>{recoveryMode ? 'Set a new password for your Samhaal account.' : 'Capture. Save. Find. Anytime.'}</Text></View>
         {!recoveryMode && !emailOpen ? <MemoryCollage /> : null}
 
         {recoveryMode ? <View style={styles.form}><PasswordField value={password} onChangeText={setPassword} placeholder="New password" /><PasswordField value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Confirm new password" /><TouchableOpacity style={styles.primary} onPress={submitRecovery} disabled={submitting}>{submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryText}>Update password</Text>}</TouchableOpacity></View> : <>
-          <TouchableOpacity style={styles.googleButton} onPress={googleSignIn} disabled={googleLoading}>{googleLoading ? <ActivityIndicator color={colors.white} /> : <><View style={styles.googleIcon}><FontAwesome name="google" size={17} color="#4285F4" /></View><Text style={styles.googleText}>Continue with Google</Text></>}</TouchableOpacity>
+          <TouchableOpacity style={styles.googleButton} onPress={googleSignIn} disabled={googleLoading}>{googleLoading ? <ActivityIndicator color={colors.white} /> : <><View style={styles.googleIcon}><Image source={{ uri: GOOGLE_G }} style={styles.googleG} resizeMode="contain" /></View><Text style={styles.googleText}>Continue with Google</Text></>}</TouchableOpacity>
           <View style={styles.orRow}><View style={styles.line} /><Text style={styles.or}>or</Text><View style={styles.line} /></View>
           <TouchableOpacity style={styles.emailButton} onPress={() => { setEmailOpen((v) => !v); setMessage(null) }}><Ionicons name="mail-outline" size={19} color={colors.text} /><Text style={styles.emailButtonText}>Continue with Email</Text></TouchableOpacity>
           {emailOpen ? <View style={styles.form}><TextInput style={styles.input} placeholder="Email" placeholderTextColor={colors.textFaint} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" /><PasswordField value={password} onChangeText={setPassword} />{!signup ? <TouchableOpacity style={styles.forgot} onPress={forgotPassword} disabled={forgotLoading}>{forgotLoading ? <ActivityIndicator size="small" color={colors.textMuted} /> : <Text style={styles.forgotText}>Forgot password?</Text>}</TouchableOpacity> : null}<TouchableOpacity style={styles.primary} onPress={submitEmail} disabled={submitting}>{submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryText}>{signup ? 'Create account' : 'Sign in'}</Text>}</TouchableOpacity></View> : null}
@@ -140,8 +161,9 @@ export default function LoginScreenV2({ recoveryMode = false, onRecoveryComplete
         </>}
 
         {message ? <Text style={[styles.message, message.error && styles.messageError]}>{message.text}</Text> : null}
-        {!recoveryMode ? <Text style={styles.legal}>By continuing, you agree to our{`\n`}<Text style={styles.legalLink}>Terms of Service</Text> and <Text style={styles.legalLink}>Privacy Policy</Text>.</Text> : null}
+        {!recoveryMode ? <View style={styles.legal}><Text style={styles.legalText}>By continuing, you agree to our</Text><View style={styles.legalLinks}><TouchableOpacity onPress={() => setLegalOpen('terms')}><Text style={styles.legalLink}>Terms of Service</Text></TouchableOpacity><Text style={styles.legalText}> and </Text><TouchableOpacity onPress={() => setLegalOpen('privacy')}><Text style={styles.legalLink}>Privacy Policy</Text></TouchableOpacity><Text style={styles.legalText}>.</Text></View></View> : null}
       </ScrollView>
+      <LegalModal type={legalOpen} onClose={() => setLegalOpen(null)} />
     </KeyboardAvoidingView>
   )
 }
@@ -170,6 +192,7 @@ const styles = StyleSheet.create({
   ideaText: { fontSize: 7.5, lineHeight: 12, color: '#222222' },
   googleButton: { marginTop: 22, minHeight: 58, borderRadius: 14, backgroundColor: '#080808', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 11 },
   googleIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  googleG: { width: 18, height: 18 },
   googleText: { fontSize: 16, color: '#FFFFFF', fontWeight: '600' },
   orRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 13 },
   line: { flex: 1, height: 1, backgroundColor: '#E1E1E1' },
@@ -189,6 +212,18 @@ const styles = StyleSheet.create({
   modeText: { fontSize: 12.5, color: '#5F636B', fontWeight: '600' },
   message: { marginTop: 8, padding: 11, borderRadius: 11, backgroundColor: '#F5F5F5', color: '#555555', fontSize: 12.5, lineHeight: 18, textAlign: 'center' },
   messageError: { backgroundColor: '#FFF8F8', color: '#B91C1C' },
-  legal: { marginTop: 'auto', paddingTop: 16, textAlign: 'center', fontSize: 11.5, lineHeight: 17, color: '#777B86' },
-  legalLink: { textDecorationLine: 'underline', color: '#555A63' },
+  legal: { marginTop: 'auto', paddingTop: 16, alignItems: 'center' },
+  legalText: { fontSize: 11.5, lineHeight: 17, color: '#777B86' },
+  legalLinks: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' },
+  legalLink: { fontSize: 11.5, lineHeight: 17, textDecorationLine: 'underline', color: '#35383E', fontWeight: '600' },
+  legalScreen: { flex: 1, backgroundColor: '#FFFFFF', paddingTop: 18 },
+  legalHeader: { paddingHorizontal: 22, paddingBottom: 18, borderBottomWidth: 1, borderBottomColor: '#EEEEEE', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  legalBrand: { fontSize: 12, color: '#777B86', fontWeight: '600', marginBottom: 4 },
+  legalTitle: { fontSize: 24, color: '#09090B', fontWeight: '800', letterSpacing: -0.5 },
+  legalClose: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
+  legalBody: { paddingHorizontal: 22, paddingTop: 18, paddingBottom: 40 },
+  legalUpdated: { fontSize: 12, color: '#92949B', marginBottom: 22 },
+  legalSection: { marginBottom: 22 },
+  legalHeading: { fontSize: 15, color: '#09090B', fontWeight: '700', marginBottom: 7 },
+  legalParagraph: { fontSize: 13.5, lineHeight: 21, color: '#5F6068' },
 })
