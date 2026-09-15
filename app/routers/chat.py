@@ -1,11 +1,11 @@
 import os
-import json
 import asyncio
 from google import genai
 from fastapi import APIRouter, Depends
 
 from app.services.db import get_client, get_signed_screenshot_url
 from app.services.auth import get_current_user_id
+from app.services.retrieval import retrieve_memories
 from app.models.schema import ChatRequest, ChatResponse, ChatSource
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -24,34 +24,43 @@ def _get_client() -> genai.Client:
 async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
     client = get_client()
 
-    def _fetch_memories():
-        return client.table("memories").select("*").eq("user_id", user_id).execute().data
+    # Retrieval happens before generation. Only the strongest candidates are sent to
+    # Gemini, so Ask Samhaal scales with top-k instead of the user's total memory count.
+    memories = await asyncio.to_thread(retrieve_memories, user_id, req.question)
 
-    memories = await asyncio.to_thread(_fetch_memories)
-    # Give every memory a short reference tag (M1, M2, ...) the model can cite back to us,
-    # and include extracted_text so it can actually answer "what was the phone number" etc.
+    if not memories:
+        return ChatResponse(
+            answer="I couldn't find a saved memory matching that.",
+            memories_used=0,
+            sources=[],
+        )
+
     memory_lines = []
     memories_by_tag = {}
     for i, m in enumerate(memories, start=1):
         tag = f"M{i}"
         memories_by_tag[tag] = m
         detail = f", details: {m['extracted_text']}" if m.get("extracted_text") else ""
+        score = m.get("retrieval_score")
+        score_text = f", retrieval_score: {float(score):.3f}" if score is not None else ""
         memory_lines.append(
             f"- [{tag}] [{m['intent']}] {m['item_name']} "
-            f"(category: {m.get('category')}, saved {m['frequency']}x{detail})"
+            f"(category: {m.get('category')}, saved {m['frequency']}x{score_text}{detail})"
         )
-    context = "\n".join(memory_lines) if memory_lines else "No memories saved yet."
+    context = "\n".join(memory_lines)
 
     system_prompt = (
-        "You are a helpful assistant answering questions about the user's saved "
-        "screenshot memories (things they wanted to read, buy, cook, visit, learn, "
-        "or apply for later). Answer only from the memories listed below, and use the "
-        "'details' field when the user asks for concrete info like a phone number, "
-        "address, price, or date. Be concise.\n\n"
-        f"MEMORIES:\n{context}\n\n"
+        "You are Samhaal's memory retrieval formatter, not a general assistant. "
+        "Your only job is to help the user recover information that exists in their "
+        "saved screenshot memories below. Do not recommend, compare, advise, infer user "
+        "preferences, or add outside knowledge. If the requested fact is not present, "
+        "say you could not find it in the saved memories. Use the details field for "
+        "concrete information such as phone numbers, addresses, prices and dates. "
+        "Keep the answer concise and retrieval-focused.\n\n"
+        f"RETRIEVED MEMORIES:\n{context}\n\n"
         "After your answer, on a new line, output exactly one line starting with "
-        "'SOURCES:' followed by a comma-separated list of the tags (e.g. M1, M3) of the "
-        "memories you actually used to answer. If none were used, write 'SOURCES: none'."
+        "'SOURCES:' followed by a comma-separated list of the tags (for example M1, M3) "
+        "you actually used. If none were used, write 'SOURCES: none'."
     )
 
     gemini_client = _get_client()
@@ -104,4 +113,3 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
                 continue
 
     return ChatResponse(answer=answer, memories_used=len(memories), sources=sources)
-
