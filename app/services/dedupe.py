@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from app.services.db import get_client
 
-SIMILARITY_THRESHOLD = 0.4  # pg_trgm similarity, 0-1 (tune after testing real data)
+SIMILARITY_THRESHOLD = 0.4  # pg_trgm similarity, 0-1; retained as the fast duplicate gate
 
 
 def find_similar_memory(user_id: str, item_name: str, intent: str) -> dict | None:
@@ -22,6 +22,16 @@ def find_similar_memory(user_id: str, item_name: str, intent: str) -> dict | Non
     return rows[0] if rows else None
 
 
+def _index_memory(memory: dict) -> None:
+    """Best-effort semantic indexing; never make screenshot saving depend on embeddings."""
+    try:
+        # Local import avoids coupling the core ingestion path to retrieval at module import time.
+        from app.services.retrieval import attach_embedding
+        attach_embedding(memory)
+    except Exception as exc:
+        print(f"[dedupe] semantic indexing skipped: {exc}")
+
+
 def upsert_memory(user_id: str, screenshot_id: str, intent: str, category: str | None,
                    item_name: str, item_type: str | None, summary: str | None,
                    extracted_text: str | None = None) -> dict:
@@ -38,8 +48,12 @@ def upsert_memory(user_id: str, screenshot_id: str, intent: str, category: str |
             # so "click to view" always opens the latest matching screenshot
             "screenshot_id": screenshot_id,
             "extracted_text": extracted_text or existing.get("extracted_text"),
+            "category": category or existing.get("category"),
+            "summary": summary or existing.get("summary"),
         }).eq("id", existing["id"]).execute()
-        return updated.data[0]
+        memory = updated.data[0]
+        _index_memory(memory)
+        return memory
 
     inserted = client.table("memories").insert({
         "screenshot_id": screenshot_id,
@@ -53,4 +67,6 @@ def upsert_memory(user_id: str, screenshot_id: str, intent: str, category: str |
         "frequency": 1,
         "last_seen": now_iso,
     }).execute()
-    return inserted.data[0]
+    memory = inserted.data[0]
+    _index_memory(memory)
+    return memory
