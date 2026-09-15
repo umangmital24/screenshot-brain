@@ -1,15 +1,23 @@
+import logging
+import os
 from datetime import datetime, timezone
-from app.services.db import get_client
 
-SIMILARITY_THRESHOLD = 0.4  # pg_trgm similarity, 0-1 (tune after testing real data)
+from app.services.db import get_client
+from app.services.embeddings import (
+    EMBEDDING_MODEL,
+    embed_text,
+    memory_embedding_text,
+    vector_literal,
+)
+
+logger = logging.getLogger(__name__)
+SIMILARITY_THRESHOLD = float(os.environ.get("TRIGRAM_DUPLICATE_THRESHOLD", "0.4"))
+SEMANTIC_DUPLICATE_THRESHOLD = float(os.environ.get("SEMANTIC_DUPLICATE_THRESHOLD", "0.90"))
 
 
 def find_similar_memory(user_id: str, item_name: str, intent: str) -> dict | None:
-    """Uses Postgres pg_trgm similarity via an RPC function to find a near-duplicate
-    memory for this user within the same intent. Returns the existing row dict if found, else None.
-    """
-    client = get_client()
-    result = client.rpc(
+    """Stage 1: cheap pg_trgm duplicate matching within the same intent."""
+    result = get_client().rpc(
         "match_memory",
         {
             "p_user_id": user_id,
@@ -22,26 +30,58 @@ def find_similar_memory(user_id: str, item_name: str, intent: str) -> dict | Non
     return rows[0] if rows else None
 
 
+def _embed(memory: dict) -> list[float] | None:
+    try:
+        return embed_text(memory_embedding_text(memory))
+    except Exception:
+        logger.warning("Memory embedding failed; continuing without semantic dedupe", exc_info=True)
+        return None
+
+
+def _find_semantic_memory(user_id: str, intent: str, vector: list[float]) -> dict | None:
+    """Stage 2: catch semantically equivalent memories with different wording."""
+    try:
+        result = get_client().rpc(
+            "match_memory_semantic",
+            {
+                "p_user_id": user_id,
+                "p_intent": intent,
+                "p_embedding": vector_literal(vector),
+                "p_threshold": SEMANTIC_DUPLICATE_THRESHOLD,
+            },
+        ).execute()
+        rows = result.data or []
+        return rows[0] if rows else None
+    except Exception:
+        logger.warning("Semantic duplicate RPC unavailable; continuing with trigram dedupe", exc_info=True)
+        return None
+
+
+def _update_existing(client, existing: dict, screenshot_id: str, category: str | None,
+                     summary: str | None, extracted_text: str | None, now_iso: str,
+                     vector: list[float] | None = None) -> dict:
+    payload = {
+        "frequency": int(existing.get("frequency") or 1) + 1,
+        "last_seen": now_iso,
+        "screenshot_id": screenshot_id,
+        "extracted_text": extracted_text or existing.get("extracted_text"),
+        "category": category or existing.get("category"),
+        "summary": summary or existing.get("summary"),
+    }
+    if vector:
+        payload["embedding"] = vector_literal(vector)
+        payload["embedding_model"] = EMBEDDING_MODEL
+    updated = client.table("memories").update(payload).eq("id", existing["id"]).execute()
+    return updated.data[0]
+
+
 def upsert_memory(user_id: str, screenshot_id: str, intent: str, category: str | None,
                    item_name: str, item_type: str | None, summary: str | None,
                    extracted_text: str | None = None) -> dict:
-    """Insert a new memory, or bump frequency + last_seen if a similar one exists."""
+    """Two-stage DS dedupe: trigram gate -> embedding similarity -> insert."""
     client = get_client()
-    existing = find_similar_memory(user_id, item_name, intent)
     now_iso = datetime.now(timezone.utc).isoformat()
-
-    if existing:
-        updated = client.table("memories").update({
-            "frequency": existing["frequency"] + 1,
-            "last_seen": now_iso,
-            # keep screenshot_id/extracted_text pointed at the most recent sighting,
-            # so "click to view" always opens the latest matching screenshot
-            "screenshot_id": screenshot_id,
-            "extracted_text": extracted_text or existing.get("extracted_text"),
-        }).eq("id", existing["id"]).execute()
-        return updated.data[0]
-
-    inserted = client.table("memories").insert({
+    candidate = {
         "screenshot_id": screenshot_id,
         "user_id": user_id,
         "intent": intent,
@@ -52,5 +92,28 @@ def upsert_memory(user_id: str, screenshot_id: str, intent: str, category: str |
         "extracted_text": extracted_text,
         "frequency": 1,
         "last_seen": now_iso,
-    }).execute()
+    }
+
+    # Fast path first: no embedding computation for obvious textual duplicates.
+    existing = find_similar_memory(user_id, item_name, intent)
+    if existing:
+        merged_for_embedding = {**existing, **candidate}
+        vector = _embed(merged_for_embedding)
+        return _update_existing(
+            client, existing, screenshot_id, category, summary, extracted_text, now_iso, vector
+        )
+
+    # Compute once, use the same vector for semantic duplicate matching and storage.
+    vector = _embed(candidate)
+    if vector:
+        semantic_existing = _find_semantic_memory(user_id, intent, vector)
+        if semantic_existing:
+            return _update_existing(
+                client, semantic_existing, screenshot_id, category, summary,
+                extracted_text, now_iso, vector
+            )
+        candidate["embedding"] = vector_literal(vector)
+        candidate["embedding_model"] = EMBEDDING_MODEL
+
+    inserted = client.table("memories").insert(candidate).execute()
     return inserted.data[0]
