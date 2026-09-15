@@ -1,7 +1,7 @@
 -- Run this in Supabase SQL Editor (Project > SQL Editor > New Query)
 
 create extension if not exists pg_trgm;
-create extension if not exists vector;
+create extension if not exists vector with schema extensions;
 create extension if not exists "uuid-ossp";
 
 create table if not exists screenshots (
@@ -22,7 +22,7 @@ create table if not exists memories (
   item_type text,
   summary text,
   extracted_text text,
-  embedding vector(768),
+  embedding extensions.vector(768),
   is_done boolean default false,
   frequency int default 1,
   last_seen timestamptz default now(),
@@ -32,7 +32,7 @@ create table if not exists memories (
 -- Migrations for existing databases
 alter table memories add column if not exists extracted_text text;
 alter table memories add column if not exists is_done boolean default false;
-alter table memories add column if not exists embedding vector(768);
+alter table memories add column if not exists embedding extensions.vector(768);
 
 -- Trigram index for fuzzy duplicate matching on item_name
 create index if not exists idx_memories_item_name_trgm
@@ -66,7 +66,7 @@ $$ language sql stable;
 create or replace function hybrid_search_memories(
   p_user_id uuid,
   p_query text,
-  p_query_embedding vector(768),
+  p_query_embedding extensions.vector(768),
   p_match_count int default 8,
   p_candidate_count int default 32
 )
