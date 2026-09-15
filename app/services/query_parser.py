@@ -28,7 +28,8 @@ STOPWORDS = {
     "it", "me", "my", "of", "on", "one", "or", "please", "save", "saved", "samhaal", "show", "that", "the",
     "this", "to", "was", "what", "where", "which", "with", "you", "find", "memory", "memories", "screenshot",
     "screenshots", "screenshoted", "screenshotted", "open", "give", "get", "tell", "today", "yesterday", "week",
-    "month", "last", "wala", "wali", "wale", "wo", "woh", "maine", "mene", "mera", "meri", "mere",
+    "month", "last", "compare", "comparison", "versus", "vs", "better", "best",
+    "wala", "wali", "wale", "wo", "woh", "maine", "mene", "mera", "meri", "mere",
 }
 
 
