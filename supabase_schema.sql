@@ -34,22 +34,15 @@ alter table memories add column if not exists extracted_text text;
 alter table memories add column if not exists is_done boolean default false;
 alter table memories add column if not exists embedding extensions.vector(768);
 
--- Trigram index for fuzzy duplicate matching on item_name
 create index if not exists idx_memories_item_name_trgm
   on memories using gin (item_name gin_trgm_ops);
-
-create index if not exists idx_memories_user_intent
-  on memories (user_id, intent);
-
-create index if not exists idx_memories_user_done
-  on memories (user_id, is_done);
-
--- ANN index used as the corpus grows. Cosine distance matches the retrieval service.
+create index if not exists idx_memories_user_intent on memories (user_id, intent);
+create index if not exists idx_memories_user_done on memories (user_id, is_done);
 create index if not exists idx_memories_embedding_hnsw
   on memories using hnsw (embedding vector_cosine_ops)
   where embedding is not null;
 
--- RPC function for fuzzy duplicate matching scoped by user and intent
+-- Stage 1 duplicate matching: cheap trigram gate.
 create or replace function match_memory(p_user_id uuid, p_item_name text, p_intent text, p_threshold float)
 returns setof memories as $$
   select * from memories
@@ -60,9 +53,29 @@ returns setof memories as $$
   limit 1;
 $$ language sql stable;
 
+-- Stage 2 duplicate matching: semantic equivalence after the trigram gate misses.
+create or replace function match_memory_semantic(
+  p_user_id uuid,
+  p_intent text,
+  p_embedding extensions.vector(768),
+  p_threshold float default 0.90
+)
+returns setof memories
+language sql stable
+as $$
+  select m.*
+  from memories m
+  where m.user_id = p_user_id
+    and m.intent = p_intent
+    and m.embedding is not null
+    and (1.0 - (m.embedding <=> p_embedding)) >= p_threshold
+  order by m.embedding <=> p_embedding
+  limit 1;
+$$;
+
 -- Hybrid retrieval: semantic candidates + lexical candidates, followed by a
--- deterministic ranker. Weights are intentionally explicit so they can be tuned
--- against the offline Recall@K/MRR/NDCG evaluation set.
+-- deterministic ranker. Weights are explicit so they can be tuned against the
+-- offline Recall@K/MRR/NDCG evaluation set.
 create or replace function hybrid_search_memories(
   p_user_id uuid,
   p_query text,
@@ -160,11 +173,8 @@ create table if not exists user_subscriptions (
   updated_at timestamptz default now()
 );
 
-create index if not exists idx_user_subscriptions_user
-  on user_subscriptions (user_id);
-
-create index if not exists idx_user_subscriptions_stripe_customer
-  on user_subscriptions (stripe_customer_id);
+create index if not exists idx_user_subscriptions_user on user_subscriptions (user_id);
+create index if not exists idx_user_subscriptions_stripe_customer on user_subscriptions (stripe_customer_id);
 
 -- Storage bucket (create via Supabase Dashboard > Storage > New Bucket)
 -- Name: screenshots
