@@ -10,6 +10,7 @@ from time import perf_counter
 from supabase import create_client
 
 from app.services.db import get_client
+from app.services.embeddings import embed_memory_ids
 from app.services.vision import extract_intent_from_metadata_with_usage, gemini_error_details
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ HEARTBEAT_SECONDS = max(
         max(10, LEASE_SECONDS // 2),
     ),
 )
+EMBED_ON_CAPTURE = os.environ.get("EMBED_ON_CAPTURE", "true").strip().lower() not in {"0", "false", "no", "off"}
 
 
 def _worker_id() -> str:
@@ -248,10 +250,19 @@ def process_one() -> bool:
         ).execute()
 
         created_memories = result.data or []
-        if visual_context:
-            memory_ids = [row.get("id") for row in created_memories if row.get("id")]
-            if memory_ids:
-                client.table("memories").update({"visual_context": visual_context}).in_("id", memory_ids).eq("user_id", capture["user_id"]).execute()
+        memory_ids = [row.get("id") for row in created_memories if row.get("id")]
+        if visual_context and memory_ids:
+            client.table("memories").update({"visual_context": visual_context}).in_("id", memory_ids).eq("user_id", capture["user_id"]).execute()
+
+        # Index immediately after canonicalization so Ask Samhaal never has to do
+        # maintenance work on the user's request path. Embedding failure is non-fatal:
+        # lexical retrieval remains available and the backfill job can repair it.
+        if EMBED_ON_CAPTURE and memory_ids:
+            try:
+                embedded = embed_memory_ids(client, memory_ids, user_id=capture["user_id"])
+                logger.info("Indexed %d/%d finalized memories for capture %s", embedded, len(memory_ids), capture_id)
+            except Exception:
+                logger.warning("Write-time embedding failed for capture %s; backfill will recover", capture_id, exc_info=True)
 
         logger.info(
             "Capture %s completed with %d memories on attempt %d%s | tokens=%s",
