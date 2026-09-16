@@ -79,8 +79,9 @@ android {
 }
 
 dependencies {
-    // Bundled on-device OCR and image-labeling models. Raw screenshots stay on Android.
+    // Bundled on-device OCR models. Raw screenshots stay on Android.
     implementation 'com.google.mlkit:text-recognition:16.0.1'
+    implementation 'com.google.mlkit:text-recognition-devanagari:16.0.1'
     implementation 'com.google.mlkit:image-labeling:17.0.9'
 
     // Reliable network-constrained retries for captures that were queued while offline.

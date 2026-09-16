@@ -5,7 +5,6 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
 import android.database.ContentObserver
-import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.ImageDecoder
 import android.graphics.PixelFormat
@@ -23,8 +22,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -67,7 +64,6 @@ class NativeScreenshotWatcher(
     val newObserver = object : ContentObserver(handler) {
       override fun onChange(selfChange: Boolean, uri: Uri?) {
         super.onChange(selfChange, uri)
-        // MediaStore often fires while the screenshot is still being committed.
         handler.postDelayed({ inspectLatestScreenshot() }, 550)
       }
     }
@@ -198,9 +194,7 @@ class NativeScreenshotWatcher(
       }
 
       val ignore = actionButton("Ignore", false).apply {
-        setOnClickListener {
-          dismissPrompt()
-        }
+        setOnClickListener { dismissPrompt() }
       }
       actions.addView(ignore, LinearLayout.LayoutParams(0, dp(42), 1f).apply {
         marginEnd = dp(8)
@@ -288,18 +282,25 @@ class NativeScreenshotWatcher(
         return@Thread
       }
 
-      val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
       val image = InputImage.fromBitmap(bitmap, 0)
-      recognizer.process(image)
-        .addOnSuccessListener { result ->
+      MultilingualOcr.recognize(
+        image,
+        bitmap.width,
+        bitmap.height,
+        onSuccess = { result ->
           val text = result.text.trim()
-          val blocksJson = buildOcrBlocksJson(result.textBlocks, bitmap.width, bitmap.height)
-          recognizer.close()
+          val blocksJson = buildOcrBlocksJson(result.blocks)
           bitmap.recycle()
 
+          service.reportDebugStage(
+            "Multilingual OCR complete: ${text.length} chars, ${result.blocks.size} blocks, ${result.scripts.joinToString("+")}"
+          )
+
           if (text.isBlank()) {
-            Toast.makeText(service, "No readable text found in this screenshot.", Toast.LENGTH_SHORT).show()
-            return@addOnSuccessListener
+            handler.post {
+              Toast.makeText(service, "No readable text found in this screenshot.", Toast.LENGTH_SHORT).show()
+            }
+            return@recognize
           }
 
           try {
@@ -315,34 +316,31 @@ class NativeScreenshotWatcher(
             service.reportDebugStage("Native screenshot queued for Samhaal")
           } catch (e: Exception) {
             service.reportDebugStage("Native screenshot queue failed: ${e.message ?: e.javaClass.simpleName}")
-            Toast.makeText(service, "Could not queue this screenshot for Samhaal.", Toast.LENGTH_SHORT).show()
+            handler.post {
+              Toast.makeText(service, "Could not queue this screenshot for Samhaal.", Toast.LENGTH_SHORT).show()
+            }
           }
-        }
-        .addOnFailureListener { e ->
-          recognizer.close()
+        },
+        onFailure = { e ->
           bitmap.recycle()
           service.reportDebugStage("Native screenshot OCR failed: ${e.message ?: e.javaClass.simpleName}")
-          Toast.makeText(service, "Could not read this screenshot.", Toast.LENGTH_SHORT).show()
-        }
+          handler.post {
+            Toast.makeText(service, "Could not read this screenshot.", Toast.LENGTH_SHORT).show()
+          }
+        },
+      )
     }.start()
   }
 
-  private fun buildOcrBlocksJson(
-    blocks: List<com.google.mlkit.vision.text.Text.TextBlock>,
-    imageWidth: Int,
-    imageHeight: Int,
-  ): String {
+  private fun buildOcrBlocksJson(blocks: List<MultilingualOcr.Block>): String {
     val array = JSONArray()
-    if (imageWidth <= 0 || imageHeight <= 0) return array.toString()
-
-    blocks.take(120).forEach { block ->
-      val box = block.boundingBox ?: return@forEach
+    blocks.take(160).forEach { block ->
       val item = JSONObject()
       item.put("text", block.text.take(1200))
-      item.put("left", box.left.toDouble() / imageWidth)
-      item.put("top", box.top.toDouble() / imageHeight)
-      item.put("width", box.width().toDouble() / imageWidth)
-      item.put("height", box.height().toDouble() / imageHeight)
+      item.put("left", block.left)
+      item.put("top", block.top)
+      item.put("width", block.width)
+      item.put("height", block.height)
       array.put(item)
     }
     return array.toString()
