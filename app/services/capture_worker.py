@@ -10,6 +10,7 @@ from time import perf_counter
 from supabase import create_client
 
 from app.services.db import get_client
+from app.services.deterministic_extraction import extract_deterministically
 from app.services.embeddings import embed_memory_ids
 from app.services.vision import extract_intent_from_metadata_with_usage, gemini_error_details
 
@@ -30,6 +31,13 @@ HEARTBEAT_SECONDS = max(
     ),
 )
 EMBED_ON_CAPTURE = os.environ.get("EMBED_ON_CAPTURE", "true").strip().lower() not in {"0", "false", "no", "off"}
+DETERMINISTIC_EXTRACTION_MODE = os.environ.get("DETERMINISTIC_CAPTURE_EXTRACTION", "off").strip().lower()
+if DETERMINISTIC_EXTRACTION_MODE not in {"off", "shadow", "on"}:
+    DETERMINISTIC_EXTRACTION_MODE = "off"
+DETERMINISTIC_MIN_CONFIDENCE = min(
+    max(float(os.environ.get("DETERMINISTIC_CAPTURE_MIN_CONFIDENCE", "0.95")), 0.90),
+    1.0,
+)
 
 
 def _worker_id() -> str:
@@ -42,6 +50,7 @@ def _record_extraction(
     *,
     success: bool,
     model: str | None,
+    provider: str = "google",
     normalized_result: dict | None = None,
     latency_ms: int | None = None,
     input_chars: int | None = None,
@@ -54,7 +63,7 @@ def _record_extraction(
     client.table("capture_extractions").insert({
         "capture_id": capture_id,
         "attempt": attempt,
-        "provider": "google",
+        "provider": provider,
         "model": model,
         "prompt_version": PROMPT_VERSION,
         "schema_version": SCHEMA_VERSION,
@@ -163,7 +172,38 @@ def process_one() -> bool:
 
     entities = capture.get("entities") or {}
     visual_context = str(entities.get("visual_context") or "").strip()[:2000] or None
-    model = os.environ.get("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
+    gemini_model = os.environ.get("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
+
+    deterministic = None
+    if DETERMINISTIC_EXTRACTION_MODE != "off":
+        try:
+            deterministic = extract_deterministically(
+                text,
+                entities,
+                capture.get("source"),
+                capture.get("ocr_blocks") or [],
+            )
+            logger.info(
+                "Capture %s deterministic route | mode=%s matched=%s confidence=%.3f reason=%s",
+                capture_id,
+                DETERMINISTIC_EXTRACTION_MODE,
+                deterministic.matched,
+                deterministic.confidence,
+                deterministic.reason,
+            )
+        except Exception:
+            # The cost-saving router must never make capture less reliable. Any rule
+            # bug degrades to the already-proven Gemini path.
+            logger.warning("Deterministic extraction router failed for %s; using Gemini", capture_id, exc_info=True)
+            deterministic = None
+
+    use_deterministic = bool(
+        DETERMINISTIC_EXTRACTION_MODE == "on"
+        and deterministic
+        and deterministic.matched
+        and deterministic.confidence >= DETERMINISTIC_MIN_CONFIDENCE
+    )
+
     started = perf_counter()
     stop_heartbeat = threading.Event()
     heartbeat = threading.Thread(
@@ -174,14 +214,21 @@ def process_one() -> bool:
     )
     heartbeat.start()
 
+    extraction_provider = "deterministic" if use_deterministic else "google"
+    extraction_model = "rules-v1" if use_deterministic else gemini_model
+
     try:
         try:
-            extraction, token_usage = extract_intent_from_metadata_with_usage(
-                text,
-                entities,
-                capture.get("source"),
-                capture.get("ocr_blocks") or [],
-            )
+            if use_deterministic:
+                extraction = deterministic.extraction
+                token_usage = {}
+            else:
+                extraction, token_usage = extract_intent_from_metadata_with_usage(
+                    text,
+                    entities,
+                    capture.get("source"),
+                    capture.get("ocr_blocks") or [],
+                )
         except Exception as exc:
             latency_ms = int((perf_counter() - started) * 1000)
             retryable, detail = gemini_error_details(exc)
@@ -197,7 +244,8 @@ def process_one() -> bool:
                     capture_id,
                     attempt,
                     success=False,
-                    model=model,
+                    model=gemini_model,
+                    provider="google",
                     latency_ms=latency_ms,
                     input_chars=len(text),
                     error_type=type(exc).__name__,
@@ -222,11 +270,18 @@ def process_one() -> bool:
 
         latency_ms = int((perf_counter() - started) * 1000)
         normalized = extraction.model_dump()
+        if use_deterministic and deterministic:
+            normalized["_routing"] = {
+                "confidence": deterministic.confidence,
+                "reason": deterministic.reason,
+                "threshold": DETERMINISTIC_MIN_CONFIDENCE,
+            }
         _record_extraction(
             capture_id,
             attempt,
             success=True,
-            model=model,
+            model=extraction_model,
+            provider=extraction_provider,
             normalized_result=normalized,
             latency_ms=latency_ms,
             input_chars=len(text),
@@ -265,10 +320,11 @@ def process_one() -> bool:
                 logger.warning("Write-time embedding failed for capture %s; backfill will recover", capture_id, exc_info=True)
 
         logger.info(
-            "Capture %s completed with %d memories on attempt %d%s | tokens=%s",
+            "Capture %s completed with %d memories on attempt %d via %s%s | tokens=%s",
             capture_id,
             len(created_memories),
             attempt,
+            extraction_provider,
             " + visual context" if visual_context else "",
             token_usage.get("total_tokens"),
         )
@@ -280,7 +336,8 @@ def process_one() -> bool:
                 capture_id,
                 attempt,
                 success=False,
-                model=model,
+                model=extraction_model,
+                provider=extraction_provider,
                 latency_ms=latency_ms,
                 input_chars=len(text),
                 error_type=type(exc).__name__,
@@ -305,11 +362,13 @@ def process_one() -> bool:
 def run_forever() -> None:
     poll_seconds = float(os.environ.get("CAPTURE_WORKER_POLL_SECONDS", "1.5"))
     logger.info(
-        "Samhaal capture worker started as %s (lease=%ss heartbeat=%ss retry_base=%ss)",
+        "Samhaal capture worker started as %s (lease=%ss heartbeat=%ss retry_base=%ss deterministic=%s threshold=%.2f)",
         _worker_id(),
         LEASE_SECONDS,
         HEARTBEAT_SECONDS,
         BASE_RETRY_SECONDS,
+        DETERMINISTIC_EXTRACTION_MODE,
+        DETERMINISTIC_MIN_CONFIDENCE,
     )
     while True:
         try:
