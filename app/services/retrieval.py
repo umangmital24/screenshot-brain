@@ -3,19 +3,25 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 import re
 from datetime import datetime, timezone
 from typing import Any
 
 from app.services.db import get_client
-from app.services.embeddings import embed_text, persist_memory_embeddings, vector_literal
+from app.services.embeddings import embed_text, vector_literal
 from app.services.query_parser import ParsedAskQuery
 
 logger = logging.getLogger(__name__)
 CANDIDATE_LIMIT = 250
 VECTOR_CANDIDATE_LIMIT = 80
-LAZY_EMBED_LIMIT = 24
 DEFAULT_TOP_K = 8
+# Loading BGE/ONNX inside the API process can exceed the 512 MiB Render instance.
+# Keep semantic vector retrieval opt-in. Lexical/FTS retrieval remains the safe
+# production path until embeddings run in a separate worker/service.
+LOCAL_VECTOR_RETRIEVAL_ENABLED = os.environ.get("LOCAL_VECTOR_RETRIEVAL_ENABLED", "false").strip().lower() in {
+    "1", "true", "yes", "on"
+}
 
 
 def _text(value: Any) -> str:
@@ -84,18 +90,14 @@ def _searchable(memory: dict) -> tuple[str, str]:
 
 
 def _passes_explicit_constraints(memory: dict, parsed: ParsedAskQuery) -> bool:
-    """Explicit user constraints are gates, not weak ranking hints."""
     searchable, visual = _searchable(memory)
     combined = f"{searchable} {visual}"
-
     if parsed.intent and _text(memory.get("intent")) != parsed.intent.lower():
         return False
-
     if parsed.colors:
         for color in parsed.colors:
             if not re.search(rf"\b{re.escape(color)}\b", combined):
                 return False
-
     return True
 
 
@@ -106,7 +108,6 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
     details = _text(memory.get("extracted_text"))
     visual = _visual_text(memory.get("visual_context"))
     score = 0.0
-
     if parsed.terms:
         term_scores = []
         for term in parsed.terms:
@@ -121,16 +122,13 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
         score += sum(term_scores) / len(term_scores) * 0.62
     else:
         score += 0.08
-
     vector_similarity = float(memory.get("vector_similarity") or 0.0)
     if vector_similarity > 0:
         score += min(max(vector_similarity, 0.0), 1.0) * 0.22
-
     if parsed.colors:
         score += 0.12
     if parsed.intent:
         score += 0.10
-
     score += 0.025 * _recency_score(memory.get("last_seen"))
     frequency = max(int(memory.get("frequency") or 1), 1)
     score += min(math.log2(frequency + 1) / 12.0, 0.015)
@@ -140,20 +138,14 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
 def _has_relevance_evidence(memory: dict, parsed: ParsedAskQuery, score: float) -> bool:
     if score <= 0:
         return False
-
     searchable, visual = _searchable(memory)
     combined = f"{searchable} {visual}"
     term_hits = sum(1 for term in parsed.terms if _word_match_score(term, combined) > 0)
     vector_similarity = float(memory.get("vector_similarity") or 0.0)
-
     if parsed.terms:
-        # At least one real term should match unless the semantic similarity is very strong.
         return term_hits > 0 or vector_similarity >= 0.66
-
-    # Constraint-only and time-only searches can be valid without free-text terms.
     if parsed.colors or parsed.intent or parsed.since_days is not None or parsed.before_days is not None:
         return True
-
     return False
 
 
@@ -174,26 +166,9 @@ def _merge_candidates(*groups: list[dict]) -> list[dict]:
     return list(merged.values())
 
 
-def _ensure_recent_embeddings(client, user_id: str) -> None:
-    try:
-        result = (
-            client.table("memories")
-            .select("id,item_name,category,intent,summary,extracted_text,visual_context")
-            .eq("user_id", user_id)
-            .is_("embedding", "null")
-            .order("last_seen", desc=True)
-            .limit(LAZY_EMBED_LIMIT)
-            .execute()
-        )
-        memories = result.data or []
-        if memories:
-            updated = persist_memory_embeddings(client, memories)
-            logger.info("Lazily embedded %d memories for user %s", updated, user_id)
-    except Exception:
-        logger.warning("Lazy memory embedding failed; continuing without vectors", exc_info=True)
-
-
 def _fetch_vector_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict]:
+    if not LOCAL_VECTOR_RETRIEVAL_ENABLED:
+        return []
     semantic_query = " ".join((*parsed.terms, *parsed.colors)).strip() or parsed.raw.strip()
     if not semantic_query:
         return []
@@ -203,11 +178,7 @@ def _fetch_vector_candidates(client, user_id: str, parsed: ParsedAskQuery) -> li
             return []
         result = client.rpc(
             "search_memories_vector",
-            {
-                "p_user_id": user_id,
-                "p_query_embedding": vector_literal(vector),
-                "p_limit": VECTOR_CANDIDATE_LIMIT,
-            },
+            {"p_user_id": user_id, "p_query_embedding": vector_literal(vector), "p_limit": VECTOR_CANDIDATE_LIMIT},
         ).execute()
         return result.data or []
     except Exception:
@@ -228,7 +199,6 @@ def _fetch_lexical_candidates(client, user_id: str, parsed: ParsedAskQuery) -> l
                     return result.data
             except Exception:
                 logger.info("%s unavailable; trying fallback", rpc_name, exc_info=True)
-
     result = (
         client.table("memories")
         .select("id,screenshot_id,intent,category,item_name,summary,extracted_text,visual_context,frequency,last_seen")
@@ -241,7 +211,8 @@ def _fetch_lexical_candidates(client, user_id: str, parsed: ParsedAskQuery) -> l
 
 
 def _fetch_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict]:
-    _ensure_recent_embeddings(client, user_id)
+    # Never backfill embeddings synchronously from Ask. Missing embeddings are a
+    # maintenance concern and must not make a user query load the local model.
     lexical = _fetch_lexical_candidates(client, user_id, parsed)
     vector = _fetch_vector_candidates(client, user_id, parsed)
     return _merge_candidates(lexical, vector)
@@ -250,17 +221,13 @@ def _fetch_candidates(client, user_id: str, parsed: ParsedAskQuery) -> list[dict
 def retrieve_memories(user_id: str, parsed: ParsedAskQuery, top_k: int = DEFAULT_TOP_K) -> list[dict]:
     client = get_client()
     candidates = [
-        memory
-        for memory in _fetch_candidates(client, user_id, parsed)
+        memory for memory in _fetch_candidates(client, user_id, parsed)
         if _in_time_window(memory, parsed) and _passes_explicit_constraints(memory, parsed)
     ]
-
     ranked = [(score_memory(memory, parsed), memory) for memory in candidates]
     ranked.sort(key=lambda pair: pair[0], reverse=True)
-
     matches = [
-        memory
-        for score, memory in ranked
+        memory for score, memory in ranked
         if score >= 0.20 and _has_relevance_evidence(memory, parsed, score)
     ]
     return matches[:top_k]
@@ -273,10 +240,8 @@ def compose_retrieval_answer(parsed: ParsedAskQuery, memories: list[dict]) -> st
         if parsed.colors:
             return f"I couldn't find a saved memory matching {', '.join(parsed.colors)}."
         return "I couldn't find a matching saved memory."
-
     if len(memories) == 1:
         return f"Found 1 relevant memory: {memories[0]['item_name']}."
-
     names = [str(memory.get("item_name") or "Saved item").strip() for memory in memories[:5]]
     suffix = "" if len(memories) <= 5 else f" and {len(memories) - 5} more"
     return f"Found {len(memories)} relevant memories: {', '.join(names)}{suffix}."
