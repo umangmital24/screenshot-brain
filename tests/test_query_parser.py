@@ -11,15 +11,14 @@ class QueryParserTests(unittest.TestCase):
         self.assertIn("shoes", parsed.terms)
         self.assertEqual(parsed.intent, "BUY_LATER")
 
-    def test_comparison_routes_to_reasoning(self):
+    def test_comparison_wording_stays_retrieval_only(self):
         parsed = parse_ask_query("compare the two jackets I saved")
-        self.assertEqual(parsed.mode, "reason")
+        self.assertEqual(parsed.mode, "retrieve")
         self.assertIn("jackets", parsed.terms)
-        self.assertNotIn("compare", parsed.terms)
 
-    def test_follow_up_routes_to_reasoning(self):
+    def test_follow_up_wording_stays_retrieval_only(self):
         parsed = parse_ask_query("which one is black?")
-        self.assertEqual(parsed.mode, "reason")
+        self.assertEqual(parsed.mode, "retrieve")
         self.assertEqual(parsed.colors, ("black",))
 
     def test_yesterday_becomes_time_filter_not_search_term(self):
