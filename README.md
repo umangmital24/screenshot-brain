@@ -1,76 +1,129 @@
-# Screenshot Memory — MVP
+# Samhaal — AI Screenshot Memory
 
-Turns screenshots into structured "intent memories" (Read Later, Buy Later, Cook Later, etc.)
-instead of a graveyard of images in your gallery.
+**Turn screenshots into memories you can actually find again.**
 
-## Stack (all free tier, no local admin rights needed)
-- **Vision + Chat**: Google Gemini API (free tier, `gemini-2.5-flash` — no shared queue, no data-policy toggles)
-- **Database + Storage**: Supabase (Postgres + file storage, free tier)
-- **Backend**: FastAPI (deploy free on Render/Railway)
-- **Frontend**: (not built yet — React on Vercel, next step)
+Samhaal is a privacy-first AI memory product for the screenshots people save and forget — books, products, recipes, places, posts, ideas, job opportunities, and more.
 
-## Setup
+Instead of treating every screenshot as just another image, Samhaal extracts useful context, organizes it into structured memories, and lets you retrieve it later with natural language.
 
-### 1. Supabase
-1. Create a free project at https://supabase.com
-2. Go to SQL Editor → paste and run `supabase_schema.sql`
-3. Also run this function (needed for fuzzy dedupe):
-   ```sql
-   create or replace function match_memory(p_user_id uuid, p_item_name text, p_intent text, p_threshold float)
-   returns setof memories as $$
-     select * from memories
-     where user_id = p_user_id
-       and intent = p_intent
-       and similarity(item_name, p_item_name) > p_threshold
-     order by similarity(item_name, p_item_name) desc
-     limit 1;
-   $$ language sql stable;
-   ```
-4. Go to Storage → create a new bucket named `screenshots`, set it **public**
-5. Go to Project Settings → API → copy your `URL` and `service_role` key (or `anon` key for now)
+## Why Samhaal
 
-### 2. Gemini API
-1. Go to https://aistudio.google.com/apikey
-2. Sign in with Google, click **Create API key** — no credit card required
-3. Copy the key. Free tier gives `gemini-2.5-flash` at 10 RPM / 250 requests per day
-   (plenty for personal use; `gemini-2.5-flash-lite` has an even higher free quota
-   — 15 RPM / 1,000/day — if you need more headroom, just change `GEMINI_VISION_MODEL`)
+Your gallery remembers **pixels**. Samhaal remembers **why you saved them**.
 
-### 3. Local config
-```bash
-cp .env.example .env
-# fill in SUPABASE_URL, SUPABASE_KEY, GEMINI_API_KEY
+Ask things like:
+
+- “What was that café I saved last month?”
+- “Show me the pasta recipe from my screenshots.”
+- “Which AI job post did I save?”
+- “What books have I wanted to read?”
+
+## Core Product Flow
+
+1. Capture or share a screenshot from Android.
+2. On-device ML Kit extracts OCR and visual signals.
+3. The capture is stored durably in a local SQLite outbox.
+4. WorkManager syncs pending captures when network conditions allow.
+5. FastAPI processes an idempotent capture job.
+6. Gemini extracts semantic information and converts it into a structured memory.
+7. Samhaal indexes that memory for fast natural-language retrieval.
+8. The original screenshot remains local in the normal Android privacy-first flow.
+
+## Privacy & Security by Design
+
+Samhaal treats privacy as part of the architecture rather than a later add-on.
+
+- **Raw screenshots stay local** in the normal Android capture flow.
+- **User-scoped database access** is enforced with Supabase Row Level Security.
+- **User-scoped storage policies** restrict screenshot objects to their owner.
+- **Server-only waitlist access** avoids exposing public client read/write policies.
+- **Retrieval-first Ask flow** answers straightforward searches without sending them to an LLM.
+- For reasoning questions, only the **top retrieved memories** are sent to Gemini instead of the entire memory store.
+- Per-user rate limits, concurrency controls, retries, and retrieval fallbacks protect model-backed flows.
+
+See [`README_ARCHITECTURE.md`](README_ARCHITECTURE.md) for the production architecture.
+
+## Ask Samhaal
+
+The retrieval pipeline is designed to avoid unnecessary model calls.
+
+- A deterministic parser first classifies the question as **retrieval-only** or **reasoning-required**.
+- Retrieval uses **PostgreSQL full-text search + trigram fuzzy search**.
+- Results are ranked using metadata, visual signals, intent, frequency, and recency.
+- Retrieval-only questions return directly.
+- Reasoning questions send only the highest-ranked memories to Gemini.
+
+## Reliability
+
+Samhaal uses production-oriented capture and reasoning controls:
+
+- SQLite-backed durable capture outbox
+- WorkManager network-aware sync
+- Idempotent capture jobs
+- Durable worker retries
+- Gemini quota-aware retry/backoff
+- Per-user reasoning RPM limits
+- Global model concurrency limits
+- Retrieval fallback when model reasoning is unavailable
+
+## Architecture
+
+```text
+Android Capture / Share
+        |
+        v
+On-device ML Kit
+(OCR + visual signals)
+        |
+        v
+SQLite Outbox + WorkManager
+        |
+        v
+FastAPI Capture API
+        |
+        v
+Durable Capture Worker
+        |
+        +----> Gemini semantic extraction
+        |
+        v
+Supabase / PostgreSQL Memories
+        |
+        v
+Retrieval + Ask Samhaal
 ```
 
-### 4. Run
+## Tech Stack
+
+**Mobile:** Android · ML Kit · SQLite · WorkManager  
+**Backend:** Python · FastAPI  
+**Data:** Supabase · PostgreSQL · Row Level Security  
+**AI:** Google Gemini · semantic extraction · retrieval-augmented reasoning  
+**Search:** PostgreSQL full-text search · trigram fuzzy search · metadata ranking
+
+## Repository Structure
+
+```text
+android_app/          Android capture and local persistence
+app/                  FastAPI application
+migrations/           Database migrations
+scripts/              Supporting scripts
+ tests/                Backend tests
+rls_policies.sql      User-isolation and storage security policies
+README_ARCHITECTURE.md Production architecture details
+```
+
+## Backend Setup
+
 ```bash
+cp .env.example .env
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
-Visit http://localhost:8000/docs for interactive API testing (Swagger UI) —
-you can upload a screenshot straight from the browser there, no frontend needed yet.
 
-## API Endpoints
-- `POST /screenshot` — upload an image, runs the full pipeline (upload → vision → dedupe → save)
-- `GET /memories?intent=READ_LATER` — list memories, optionally filtered
-- `GET /memories/summary` — counts grouped by intent (for dashboard cards)
-- `POST /chat` — `{"question": "what books have I saved?"}`
+The API will be available locally through FastAPI, with interactive documentation exposed by the application configuration.
 
-## Testing without a frontend
-Use the `/docs` Swagger UI, or curl:
-```bash
-curl -X POST http://localhost:8000/screenshot \
-  -F "file=@/path/to/screenshot.png"
+## Product Direction
 
-curl http://localhost:8000/memories
+Samhaal is being built around one idea: **saving information should make it easier to remember, not harder to find.**
 
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"question": "what products did I want to buy?"}'
-```
-
-## Known MVP limitations (by design, see build plan)
-- Single hardcoded user, no auth yet
-- No Android auto-detect — manual upload only
-- Dedupe similarity threshold (0.4) is a starting guess — tune after testing with real screenshots
-- Free OpenRouter models can be rate-limited or flaky on strict JSON — there's a one-time retry built into `vision.py`, but expect occasional failures
+The goal is a fast, low-friction memory layer where capture feels as natural as taking a screenshot while retrieval feels as natural as asking a question.
