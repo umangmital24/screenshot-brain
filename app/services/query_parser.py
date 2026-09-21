@@ -31,11 +31,17 @@ SEARCH_ALIASES = {
     "gaana": "music", "gana": "music", "gaane": "music", "gane": "music",
     "vacancy": "job", "vacancies": "job", "opening": "job", "openings": "job",
     "position": "job", "positions": "job",
+    "poem": "poetry", "poems": "poetry", "shayari": "poetry", "sher": "poetry", "kavita": "poetry",
+    "गाना": "music", "गाने": "music", "गीत": "music", "सॉन्ग": "music", "सॉन्ग्स": "music",
+    "शायरी": "poetry", "कविता": "poetry",
+    "नौकरी": "job", "जॉब": "job", "जॉब्स": "job",
+    "किताब": "book", "किताबें": "book", "रेसिपी": "recipe",
 }
 
 REASONING_HINTS = {
     "recommend", "recommendation", "recommendations", "suggest", "suggestion", "suggestions",
     "should", "better", "best", "compare", "comparison", "versus", "vs", "choose", "pick", "prefer",
+    "सुझाओ", "सुझाव", "बेहतर", "सुनूं", "चुनूं",
 }
 
 STOPWORDS = {
@@ -47,6 +53,9 @@ STOPWORDS = {
     "recommend", "recommendation", "recommendations", "suggest", "suggestion", "suggestions", "should",
     "want", "compare", "comparison", "versus", "vs", "better", "best", "choose", "pick", "prefer",
     "wala", "wali", "wale", "wo", "woh", "maine", "mene", "mera", "meri", "mere",
+    "मुझे", "वो", "वह", "ये", "यह", "मेरी", "मेरा", "मेरे", "मैं", "मैंने", "जो", "था", "थी", "थे",
+    "दिखाओ", "बताओ", "दो", "सेव", "किया", "की", "के", "का", "में", "से", "को", "और", "एक", "कुछ",
+    "कौन", "कौनसा", "कौन-सा", "सा", "सुझाओ", "सुझाव", "बेहतर", "सुनूं", "चुनूं",
 }
 
 
