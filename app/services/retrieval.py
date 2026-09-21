@@ -77,10 +77,13 @@ def _in_time_window(memory: dict, parsed: ParsedAskQuery) -> bool:
 def _searchable(memory: dict) -> tuple[str, str]:
     name = _text(memory.get("item_name"))
     category = _text(memory.get("category"))
+    intent = _text(memory.get("intent")).replace("_", " ")
     summary = _text(memory.get("summary"))
     details = _text(memory.get("extracted_text"))
     visual = _visual_text(memory.get("visual_context"))
-    return f"{name} {category} {summary} {details}", visual
+    # Intent is searchable evidence too: "what should I read?" should match a
+    # READ_LATER book even when the title/summary never contains the word "read".
+    return f"{name} {category} {intent} {summary} {details}", visual
 
 
 def _passes_explicit_constraints(memory: dict, parsed: ParsedAskQuery) -> bool:
