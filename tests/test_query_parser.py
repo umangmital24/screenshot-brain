@@ -33,9 +33,14 @@ class QueryParserTests(unittest.TestCase):
         self.assertEqual(parsed.mode, "reason")
         self.assertEqual(parsed.terms, ("music",))
 
-    def test_devanagari_words_are_preserved(self):
+    def test_devanagari_shayari_normalizes_to_poetry(self):
         parsed = parse_ask_query("मुझे वो शायरी दिखाओ")
-        self.assertIn("शायरी", parsed.terms)
+        self.assertEqual(parsed.terms, ("poetry",))
+
+    def test_hindi_music_recommendation_normalizes_to_music(self):
+        parsed = parse_ask_query("कौन सा गाना सुनूं")
+        self.assertEqual(parsed.mode, "reason")
+        self.assertEqual(parsed.terms, ("music",))
 
     def test_yesterday_becomes_time_filter_not_search_term(self):
         parsed = parse_ask_query("what jobs did I save yesterday")
