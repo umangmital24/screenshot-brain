@@ -62,11 +62,11 @@ class ParsedAskQuery:
 
 
 def _tokens(text: str) -> list[str]:
-    # Split on whitespace/common punctuation instead of using \\w: Python's \\w
-    # drops Devanagari combining marks, which turns words like "शायरी" into
-    # fragments. This keeps Hindi and other Unicode-script words intact.
-    raw_tokens = re.findall(r"[^\\s,!?;:()\\[\\]{}\\\"'“”‘’/\\\\|]+", text.lower())
-    return [token.strip(".") for token in raw_tokens if token.strip(".")]
+    # Whitespace splitting preserves Devanagari combining marks. Strip only
+    # punctuation at token edges so words such as "शायरी" remain whole.
+    edge_punct = ".,!?;:()[]{}\\\"'“”‘’/\\\\|"
+    tokens = [token.strip(edge_punct) for token in text.lower().split()]
+    return [token for token in tokens if token]
 
 
 def _detect_intent(tokens: list[str]) -> str | None:
