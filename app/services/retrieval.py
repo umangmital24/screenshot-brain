@@ -17,6 +17,13 @@ VECTOR_CANDIDATE_LIMIT = 80
 LAZY_EMBED_LIMIT = 24
 DEFAULT_TOP_K = 8
 
+TERM_EQUIVALENTS = {
+    "music": ("music", "song", "songs", "track", "tracks", "gaana", "gana", "गाना", "गाने", "गीत"),
+    "poetry": ("poetry", "poem", "poems", "shayari", "sher", "kavita", "शायरी", "कविता"),
+    "job": ("job", "jobs", "role", "roles", "vacancy", "vacancies", "opening", "openings", "जॉब", "नौकरी"),
+}
+
+
 
 def _text(value: Any) -> str:
     return str(value or "").strip().lower()
@@ -37,11 +44,16 @@ def _visual_text(raw: Any) -> str:
 def _word_match_score(term: str, haystack: str) -> float:
     if not term or not haystack:
         return 0.0
-    if re.search(rf"\b{re.escape(term)}\b", haystack):
-        return 1.0
-    if term in haystack:
-        return 0.55
-    return 0.0
+
+    best = 0.0
+    for variant in TERM_EQUIVALENTS.get(term, (term,)):
+        # Word boundaries work well for Latin text; substring matching also
+        # covers Devanagari and inflected/category variants.
+        if re.search(rf"\b{re.escape(variant)}\b", haystack):
+            return 1.0
+        if variant in haystack:
+            best = max(best, 0.55)
+    return best
 
 
 def _age_days(value: Any) -> float | None:
@@ -77,10 +89,13 @@ def _in_time_window(memory: dict, parsed: ParsedAskQuery) -> bool:
 def _searchable(memory: dict) -> tuple[str, str]:
     name = _text(memory.get("item_name"))
     category = _text(memory.get("category"))
+    intent = _text(memory.get("intent")).replace("_", " ")
     summary = _text(memory.get("summary"))
     details = _text(memory.get("extracted_text"))
     visual = _visual_text(memory.get("visual_context"))
-    return f"{name} {category} {summary} {details}", visual
+    # Intent is searchable evidence too: "what should I read?" should match a
+    # READ_LATER book even when the title/summary never contains the word "read".
+    return f"{name} {category} {intent} {summary} {details}", visual
 
 
 def _passes_explicit_constraints(memory: dict, parsed: ParsedAskQuery) -> bool:
@@ -101,6 +116,7 @@ def _passes_explicit_constraints(memory: dict, parsed: ParsedAskQuery) -> bool:
 def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
     name = _text(memory.get("item_name"))
     category = _text(memory.get("category"))
+    intent_text = _text(memory.get("intent")).replace("_", " ")
     summary = _text(memory.get("summary"))
     details = _text(memory.get("extracted_text"))
     visual = _visual_text(memory.get("visual_context"))
@@ -112,6 +128,7 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
             best = max(
                 _word_match_score(term, name) * 1.8,
                 _word_match_score(term, category) * 1.35,
+                _word_match_score(term, intent_text) * 1.15,
                 _word_match_score(term, summary),
                 _word_match_score(term, details) * 0.8,
                 _word_match_score(term, visual) * 0.65,

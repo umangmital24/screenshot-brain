@@ -23,13 +23,39 @@ INTENT_HINTS = {
     "TRY_LATER": {"try", "idea", "ideas", "tool", "tools", "app", "apps"},
 }
 
+# Normalize common conversational words to the category people actually saved.
+# Keep this deliberately small: semantic/vector retrieval still handles the long tail.
+SEARCH_ALIASES = {
+    "song": "music", "songs": "music", "track": "music", "tracks": "music",
+    "playlist": "music", "playlists": "music", "listen": "music", "listening": "music",
+    "gaana": "music", "gana": "music", "gaane": "music", "gane": "music",
+    "vacancy": "job", "vacancies": "job", "opening": "job", "openings": "job",
+    "position": "job", "positions": "job",
+    "poem": "poetry", "poems": "poetry", "shayari": "poetry", "sher": "poetry", "kavita": "poetry",
+    "गाना": "music", "गाने": "music", "गीत": "music", "सॉन्ग": "music", "सॉन्ग्स": "music",
+    "शायरी": "poetry", "कविता": "poetry",
+    "नौकरी": "job", "जॉब": "job", "जॉब्स": "job",
+    "किताब": "book", "किताबें": "book", "रेसिपी": "recipe",
+}
+
+REASONING_HINTS = {
+    "recommend", "recommendation", "recommendations", "suggest", "suggestion", "suggestions",
+    "should", "better", "best", "compare", "comparison", "versus", "vs", "choose", "pick", "prefer",
+    "सुझाओ", "सुझाव", "बेहतर", "सुनूं", "चुनूं",
+}
+
 STOPWORDS = {
-    "a", "about", "an", "and", "are", "as", "at", "be", "did", "do", "for", "from", "i", "in", "is",
-    "it", "me", "my", "of", "on", "one", "or", "please", "save", "saved", "samhaal", "show", "that", "the",
-    "this", "to", "was", "what", "where", "which", "with", "you", "find", "memory", "memories", "screenshot",
-    "screenshots", "screenshoted", "screenshotted", "open", "give", "get", "tell", "today", "yesterday", "week",
-    "month", "last", "compare", "comparison", "versus", "vs", "better", "best",
+    "a", "about", "an", "and", "are", "as", "at", "be", "can", "could", "did", "do", "for", "from",
+    "i", "in", "is", "it", "me", "my", "of", "on", "one", "or", "please", "save", "saved", "samhaal",
+    "show", "some", "something", "that", "the", "this", "to", "was", "what", "where", "which", "with",
+    "would", "you", "your", "find", "memory", "memories", "screenshot", "screenshots", "screenshoted",
+    "screenshotted", "open", "give", "get", "tell", "today", "yesterday", "week", "month", "last",
+    "recommend", "recommendation", "recommendations", "suggest", "suggestion", "suggestions", "should",
+    "want", "compare", "comparison", "versus", "vs", "better", "best", "choose", "pick", "prefer",
     "wala", "wali", "wale", "wo", "woh", "maine", "mene", "mera", "meri", "mere",
+    "मुझे", "वो", "वह", "ये", "यह", "मेरी", "मेरा", "मेरे", "मैं", "मैंने", "जो", "था", "थी", "थे",
+    "दिखाओ", "बताओ", "दो", "सेव", "किया", "की", "के", "का", "में", "से", "को", "और", "एक", "कुछ",
+    "कौन", "कौनसा", "कौन-सा", "सा", "सुझाओ", "सुझाव", "बेहतर", "सुनूं", "चुनूं",
 }
 
 
@@ -45,7 +71,11 @@ class ParsedAskQuery:
 
 
 def _tokens(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9+#.-]+", text.lower())
+    # Whitespace splitting preserves Devanagari combining marks. Strip only
+    # punctuation at token edges so words such as "शायरी" remain whole.
+    edge_punct = ".,!?;:()[]{}\\\"'“”‘’/\\\\|"
+    tokens = [token.strip(edge_punct) for token in text.lower().split()]
+    return [token for token in tokens if token]
 
 
 def _detect_intent(tokens: list[str]) -> str | None:
@@ -89,14 +119,17 @@ def parse_ask_query(question: str) -> ParsedAskQuery:
     for token in tokens:
         if token in STOPWORDS or token in color_tokens:
             continue
-        if token not in terms:
-            terms.append(token)
+        normalized = SEARCH_ALIASES.get(token, token)
+        if normalized not in terms:
+            terms.append(normalized)
 
-    # Samhaal is a memory retrieval product. Natural language is used to express
-    # search constraints, not to route into recommendation/advice reasoning modes.
+    followup_reasoning = any(
+        phrase in lowered for phrase in ("which one", "what about", "of these", "from these")
+    )
+    mode = "reason" if any(token in REASONING_HINTS for token in tokens) or followup_reasoning else "retrieve"
     return ParsedAskQuery(
         raw=raw,
-        mode="retrieve",
+        mode=mode,
         terms=tuple(terms[:12]),
         colors=colors,
         intent=_detect_intent(tokens),

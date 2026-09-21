@@ -11,16 +11,36 @@ class QueryParserTests(unittest.TestCase):
         self.assertIn("shoes", parsed.terms)
         self.assertEqual(parsed.intent, "BUY_LATER")
 
-    def test_comparison_wording_still_routes_to_retrieval(self):
+    def test_comparison_wording_routes_to_grounded_reasoning(self):
         parsed = parse_ask_query("compare the two jackets I saved")
-        self.assertEqual(parsed.mode, "retrieve")
+        self.assertEqual(parsed.mode, "reason")
         self.assertIn("jackets", parsed.terms)
         self.assertNotIn("compare", parsed.terms)
 
-    def test_follow_up_wording_stays_retrieval_only(self):
+    def test_follow_up_wording_routes_to_grounded_reasoning(self):
         parsed = parse_ask_query("which one is black?")
-        self.assertEqual(parsed.mode, "retrieve")
+        self.assertEqual(parsed.mode, "reason")
         self.assertEqual(parsed.colors, ("black",))
+
+    def test_song_language_normalizes_to_music(self):
+        parsed = parse_ask_query("Which songs should I listen?")
+        self.assertEqual(parsed.mode, "reason")
+        self.assertEqual(parsed.terms, ("music",))
+        self.assertIsNone(parsed.intent)
+
+    def test_suggest_music_uses_same_retrieval_term(self):
+        parsed = parse_ask_query("Suggest me music")
+        self.assertEqual(parsed.mode, "reason")
+        self.assertEqual(parsed.terms, ("music",))
+
+    def test_devanagari_shayari_normalizes_to_poetry(self):
+        parsed = parse_ask_query("मुझे वो शायरी दिखाओ")
+        self.assertEqual(parsed.terms, ("poetry",))
+
+    def test_hindi_music_recommendation_normalizes_to_music(self):
+        parsed = parse_ask_query("कौन सा गाना सुनूं")
+        self.assertEqual(parsed.mode, "reason")
+        self.assertEqual(parsed.terms, ("music",))
 
     def test_yesterday_becomes_time_filter_not_search_term(self):
         parsed = parse_ask_query("what jobs did I save yesterday")
