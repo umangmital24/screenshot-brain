@@ -14,7 +14,7 @@ INTENT_HINTS = {
     "BUY_LATER": {
         "buy", "product", "products", "shoe", "shoes", "shirt", "shirts", "jacket", "jackets",
         "suit", "suits", "dress", "dresses", "laptop", "laptops", "phone", "phones",
-        "headphone", "headphones", "watches",
+        "headphone", "headphones", "watch", "watches",
     },
     "COOK_LATER": {"recipe", "recipes", "cook", "cooking", "dish", "dishes", "food"},
     "VISIT_LATER": {"restaurant", "restaurants", "cafe", "cafes", "place", "places", "visit", "travel", "hotel", "hotels"},
