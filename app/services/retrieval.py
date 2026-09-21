@@ -116,6 +116,7 @@ def _passes_explicit_constraints(memory: dict, parsed: ParsedAskQuery) -> bool:
 def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
     name = _text(memory.get("item_name"))
     category = _text(memory.get("category"))
+    intent_text = _text(memory.get("intent")).replace("_", " ")
     summary = _text(memory.get("summary"))
     details = _text(memory.get("extracted_text"))
     visual = _visual_text(memory.get("visual_context"))
@@ -127,6 +128,7 @@ def score_memory(memory: dict, parsed: ParsedAskQuery) -> float:
             best = max(
                 _word_match_score(term, name) * 1.8,
                 _word_match_score(term, category) * 1.35,
+                _word_match_score(term, intent_text) * 1.15,
                 _word_match_score(term, summary),
                 _word_match_score(term, details) * 0.8,
                 _word_match_score(term, visual) * 0.65,
