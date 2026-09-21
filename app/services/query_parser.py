@@ -62,9 +62,11 @@ class ParsedAskQuery:
 
 
 def _tokens(text: str) -> list[str]:
-    # Unicode-aware so Hindi/Devanagari queries survive parsing instead of
-    # collapsing to an empty search.
-    return re.findall(r"[\w+#.-]+", text.lower(), flags=re.UNICODE)
+    # Split on whitespace/common punctuation instead of using \\w: Python's \\w
+    # drops Devanagari combining marks, which turns words like "शायरी" into
+    # fragments. This keeps Hindi and other Unicode-script words intact.
+    raw_tokens = re.findall(r"[^\\s,!?;:()\\[\\]{}\\\"'“”‘’/\\\\|]+", text.lower())
+    return [token.strip(".") for token in raw_tokens if token.strip(".")]
 
 
 def _detect_intent(tokens: list[str]) -> str | None:
