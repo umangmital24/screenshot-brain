@@ -17,6 +17,13 @@ VECTOR_CANDIDATE_LIMIT = 80
 LAZY_EMBED_LIMIT = 24
 DEFAULT_TOP_K = 8
 
+TERM_EQUIVALENTS = {
+    "music": ("music", "song", "songs", "track", "tracks", "gaana", "gana", "गाना", "गाने", "गीत"),
+    "poetry": ("poetry", "poem", "poems", "shayari", "sher", "kavita", "शायरी", "कविता"),
+    "job": ("job", "jobs", "role", "roles", "vacancy", "vacancies", "opening", "openings", "जॉब", "नौकरी"),
+}
+
+
 
 def _text(value: Any) -> str:
     return str(value or "").strip().lower()
@@ -37,11 +44,16 @@ def _visual_text(raw: Any) -> str:
 def _word_match_score(term: str, haystack: str) -> float:
     if not term or not haystack:
         return 0.0
-    if re.search(rf"\b{re.escape(term)}\b", haystack):
-        return 1.0
-    if term in haystack:
-        return 0.55
-    return 0.0
+
+    best = 0.0
+    for variant in TERM_EQUIVALENTS.get(term, (term,)):
+        # Word boundaries work well for Latin text; substring matching also
+        # covers Devanagari and inflected/category variants.
+        if re.search(rf"\b{re.escape(variant)}\b", haystack):
+            return 1.0
+        if variant in haystack:
+            best = max(best, 0.55)
+    return best
 
 
 def _age_days(value: Any) -> float | None:
