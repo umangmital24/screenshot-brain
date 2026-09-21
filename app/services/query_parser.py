@@ -112,7 +112,10 @@ def parse_ask_query(question: str) -> ParsedAskQuery:
         if normalized not in terms:
             terms.append(normalized)
 
-    mode = "reason" if any(token in REASONING_HINTS for token in tokens) else "retrieve"
+    followup_reasoning = any(
+        phrase in lowered for phrase in ("which one", "what about", "of these", "from these")
+    )
+    mode = "reason" if any(token in REASONING_HINTS for token in tokens) or followup_reasoning else "retrieve"
     return ParsedAskQuery(
         raw=raw,
         mode=mode,
