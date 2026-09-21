@@ -7,10 +7,32 @@ from app.services.auth import get_current_user_id
 from app.services.entitlements import enforce_monthly_limit
 from app.services.query_parser import parse_ask_query
 from app.services.retrieval import retrieve_memories, compose_retrieval_answer
+from app.services.ask_ai import generate_grounded_answer
 from app.models.schema import ChatRequest, ChatResponse, ChatSource
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+def _parse_with_history(req: ChatRequest):
+    parsed = parse_ask_query(req.question)
+    has_constraints = bool(
+        parsed.terms or parsed.colors or parsed.intent
+        or parsed.since_days is not None or parsed.before_days is not None
+    )
+    if has_constraints:
+        return parsed
+
+    # Follow-ups such as "which one?" need the subject from the previous user
+    # turn. Only borrow context when the current turn has no useful retrieval
+    # constraints of its own.
+    for turn in reversed(req.history):
+        if turn.role != "user":
+            continue
+        prior = parse_ask_query(turn.text)
+        if prior.terms or prior.colors or prior.intent:
+            return parse_ask_query(f"{turn.text} {req.question}")
+    return parsed
 
 
 async def _build_sources(client, user_id: str, memories: list[dict]) -> list[ChatSource]:
@@ -75,7 +97,7 @@ def _record_usage(client, req: ChatRequest, user_id: str, metadata: dict) -> Non
 
 @router.post("", response_model=ChatResponse)
 async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
-    """Natural-language screenshot memory retrieval only."""
+    """Natural-language retrieval with grounded reasoning when the query needs it."""
     enforce_monthly_limit(
         user_id=user_id,
         entitlement_key="ask_queries_per_month",
@@ -83,7 +105,7 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
     )
 
     client = get_client()
-    parsed = parse_ask_query(req.question)
+    parsed = _parse_with_history(req)
 
     try:
         memories = await asyncio.to_thread(retrieve_memories, user_id, parsed, 8)
@@ -92,15 +114,32 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
         raise HTTPException(status_code=503, detail="Memory search is temporarily unavailable.")
 
     answer = compose_retrieval_answer(parsed, memories)
+    ai_usage: dict = {}
+    if parsed.mode == "reason" and memories:
+        try:
+            answer, ai_usage = await asyncio.to_thread(
+                generate_grounded_answer,
+                req.question,
+                memories,
+                req.history,
+            )
+        except Exception:
+            # Search results remain useful even if Gemini is rate-limited or
+            # temporarily unavailable. Never turn an Ask reasoning failure into
+            # a failed search.
+            logger.warning("Grounded Ask answer generation failed; using retrieval fallback", exc_info=True)
+
     sources = await _build_sources(client, user_id, memories)
 
     await asyncio.to_thread(_record_usage, client, req, user_id, {
-        "mode": "retrieval",
-        "model": None,
+        "mode": parsed.mode,
+        "model": ai_usage.get("model"),
         "retrieved_count": len(memories),
+        "provider_usage": {key: value for key, value in ai_usage.items() if key != "model"},
         "filters": {
             "intent": parsed.intent,
             "colors": list(parsed.colors),
+            "terms": list(parsed.terms),
             "since_days": parsed.since_days,
             "before_days": parsed.before_days,
         },
