@@ -154,7 +154,7 @@ const FAQ_DATA = [
 ]
 
 const NAV_SECTIONS = [
-  { id: 'problem', label: 'The Problem' },
+  { id: 'story', label: 'The Story' },
   { id: 'how-it-works', label: 'How It Works' },
   { id: 'trust', label: 'Trust & Privacy' },
   { id: 'features', label: 'Features' },
