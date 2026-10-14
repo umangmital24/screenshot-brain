@@ -1,15 +1,13 @@
-# Samhaal interactive story images
+# Samhaal original screenshot phone assets
 
-This folder is reserved for the seven optimized visuals from the product storyboard.
+This directory contains the **seven real Samhaal phone screenshots**, cropped from the original storyboard artwork supplied by the project owner. These replace the former CSS-generated mock phone.
 
-Required paths:
+- `01.webp`: Existing screenshot gallery
+- `02.webp`: Introducing Samhaal
+- `03.webp`: Organized memory library
+- `04.webp`: Save or ignore a screenshot
+- `05.webp`: Save bubble
+- `06.webp`: Batch import old screenshots
+- `07.webp`: Ask Samhaal to find a saved memory
 
-- `01.webp`: Screenshot gallery problem
-- `02.webp`: Meet Samhaal
-- `03.webp`: Saved memory collection
-- `04.webp`: Save individual screenshots
-- `05.webp`: One-tap save bubble
-- `06.webp`: Import existing screenshots
-- `07.webp`: Ask your memory
-
-Until those assets are uploaded, the interactive scroller uses its CSS phone fallback. The source images are included in the companion downloadable asset bundle provided in the conversation.
+All seven WebP assets are committed alongside `src/StoryboardScroller.jsx`, rendered from `/story/01.webp` through `/story/07.webp`.
