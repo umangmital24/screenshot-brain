@@ -1,2 +1,2 @@
-import ScrollMemoryJourney from './ScrollMemoryJourney'
+import HowItWorksExperience from './HowItWorksExperience'
 import StoryboardScroller from './StoryboardScroller'
