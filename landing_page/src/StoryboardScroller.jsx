@@ -194,6 +194,21 @@ export default function StoryboardScroller() {
             <div className="samhaal-stage-halo halo-one" aria-hidden="true" />
             <div className="samhaal-stage-halo halo-two" aria-hidden="true" />
             <div className="samhaal-stage-frames">
+              {/* A functional product preview remains visible while images are loading. */}
+              <div className="samhaal-fallback-phone" aria-hidden="true">
+                <div className="samhaal-faux-status">9:41 <span>● ▰</span></div>
+                <div className="samhaal-faux-brand">Samhaal <span>संभाल</span></div>
+                <div className="samhaal-faux-title">{CHAPTERS[active].title}</div>
+                <div className="samhaal-faux-subtitle">Save now. Find it when it matters.</div>
+                <div className="samhaal-faux-grid">
+                  <div className="samhaal-faux-card faux-mint"><span>↗</span><strong>The Brew Room</strong><small>CAFE · SAVED</small></div>
+                  <div className="samhaal-faux-card faux-black"><span>⌁</span><strong>Atomic Habits</strong><small>READ LATER</small></div>
+                  <div className="samhaal-faux-card faux-peach"><span>✳</span><strong>Pesto Pasta</strong><small>RECIPE</small></div>
+                  <div className="samhaal-faux-card faux-sky"><span>◈</span><strong>Weekend trips</strong><small>TRAVEL</small></div>
+                </div>
+                <div className="samhaal-faux-search">⌕ &nbsp; Ask your memory...</div>
+                <div className="samhaal-faux-tabs">▦ Memories <span>✧ Ask</span></div>
+              </div>
               {CHAPTERS.map((chapter, index) => (
                 <img
                   key={chapter.number}
@@ -202,6 +217,7 @@ export default function StoryboardScroller() {
                   className={'samhaal-stage-image' + (active === index ? ' is-current' : '')}
                   loading={index < 2 ? 'eager' : 'lazy'}
                   decoding="async"
+                  onError={(event) => { event.currentTarget.style.display = 'none' }}
                   aria-hidden={active !== index}
                 />
               ))}
