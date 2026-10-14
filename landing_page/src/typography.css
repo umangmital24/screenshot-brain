@@ -1,0 +1,63 @@
+/* Site-wide typography: one coherent display and UI font.
+   Inter handles Latin text; Noto Sans Devanagari covers संभाल. */
+:root {
+  --font-sans: "Inter", "Noto Sans Devanagari", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --font-mono: var(--font-sans);
+  --font-code: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+}
+html,
+body,
+#root,
+.landing-shell,
+.samhaal-story,
+.samhaal-how,
+.landing-shell button,
+.landing-shell input,
+.landing-shell select,
+.landing-shell textarea,
+.landing-shell option {
+  font-family: var(--font-sans);
+}
+.landing-shell h1,
+.landing-shell h2,
+.landing-shell h3,
+.landing-shell h4,
+.samhaal-story h2,
+.samhaal-story h3,
+.samhaal-how h2,
+.samhaal-how h3 {
+  font-family: var(--font-sans);
+  font-synthesis: none;
+}
+.landing-shell :is(
+  .landing-section-tag,
+  .landing-hero-badge,
+  .landing-nav-link,
+  .preview-status-pill,
+  .preview-time-tag,
+  .preview-intent-badge,
+  .feature-card,
+  .card-badge-status,
+  .flow-opt-number,
+  .landing-footer,
+  .footer-copyright,
+  .waitlist-disclaimer,
+  .samhaal-chapter-eyebrow,
+  .samhaal-chapter-index,
+  .samhaal-how-eyebrow,
+  .samhaal-how-nav-head,
+  .samhaal-how-step-kicker
+) {
+  font-family: var(--font-sans);
+}
+.landing-brand-sub,
+.landing-brand-wordmark .landing-brand-sub,
+.samhaal-how-art-marker {
+  font-family: "Noto Sans Devanagari", "Inter", sans-serif;
+}
+.landing-shell :is(code, pre, kbd, samp, .preview-raw-ocr, .mem-raw-detail, .tip-kbd, .search-kbd-hint kbd, .shortcut-item kbd) {
+  font-family: var(--font-code);
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
