@@ -80,12 +80,12 @@
           </div>
 
           <h1 className="landing-hero-title">
-            Stop your gallery from becoming a screenshot graveyard.
+            Screenshots you save. Memories you keep.
           </h1>
 
           <p className="landing-hero-subtitle">
-            We all take screenshots thinking <em>"I'll use this later"</em> — and then they vanish into a digital cemetery of thousands of photos.
-            <strong> Samhaal</strong> rescues your captures, extracts text, prices, and links, sorts your intent, and lets you ask anything with AI.
+            The café you loved. That book you meant to read. The idea you didn’t want to forget.
+            <strong> Samhaal</strong> turns the screenshots you save into memories you can actually find, whenever you need them.
           </p>
 
           <div className="landing-hero-cta-group">
