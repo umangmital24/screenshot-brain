@@ -519,3 +519,242 @@
     transition-duration: .01ms !important;
   }
 }
+
+
+/* Scroll-led journey: natural document scroll, sticky authentic product visual. */
+.samhaal-how-scroll {
+  overflow: visible;
+  scroll-margin-top: 70px;
+}
+.samhaal-how-scroll .samhaal-how-interface {
+  align-items: start;
+}
+.samhaal-how-scroll .samhaal-how-navigation {
+  padding-top: 6px;
+  align-self: stretch;
+}
+.samhaal-how-scroll .samhaal-how-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.samhaal-how-scroll-step {
+  min-height: 76svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(50px, 7vw, 110px) 0;
+  opacity: .46;
+  transform: translateY(14px);
+  transition: opacity .5s ease, transform .65s cubic-bezier(.22,1,.36,1);
+}
+.samhaal-how-scroll-step.is-active,
+.samhaal-how-scroll-step:focus-within {
+  opacity: 1;
+  transform: none;
+}
+.samhaal-how-scroll .samhaal-how-tab {
+  width: 100%;
+  max-width: 510px;
+  padding: 19px 22px;
+  background: rgba(255,255,255,.84);
+}
+.samhaal-how-scroll .samhaal-how-tab.is-active {
+  transform: none;
+  border-color: #b5e8d0;
+}
+.samhaal-how-step-content {
+  padding: clamp(20px, 3.5vw, 44px) clamp(8px, 1.3vw, 22px) 0;
+}
+.samhaal-how-step-kicker {
+  font-size: .69rem;
+  font-weight: 800;
+  letter-spacing: .16em;
+  color: #038e61;
+  text-transform: uppercase;
+}
+.samhaal-how-step-content h3 {
+  font-size: clamp(2rem, 3.6vw, 3.7rem);
+  line-height: 1.06;
+  letter-spacing: -.062em;
+  font-weight: 830;
+  max-width: 590px;
+  text-wrap: balance;
+  margin: 18px 0 17px;
+}
+.samhaal-how-step-content p {
+  color: #53665a;
+  font-size: clamp(1rem, 1.3vw, 1.2rem);
+  line-height: 1.65;
+  max-width: 500px;
+  margin: 0;
+}
+.samhaal-how-step-note {
+  display: flex;
+  gap: 13px;
+  align-items: start;
+  margin-top: 29px;
+  max-width: 500px;
+  color: #265944;
+}
+.samhaal-how-step-note > span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  height: 29px;
+  width: 29px;
+  border-radius: 50%;
+  background: #def8e9;
+  color: #06966c;
+  font-size: .89rem;
+}
+.samhaal-how-step-note > div {display: flex; flex-direction: column; gap: 4px;}
+.samhaal-how-step-note strong {
+  color: #16472e;
+  font-size: .93rem;
+  font-weight: 800;
+}
+.samhaal-how-step-note small {
+  color: #708375;
+  font-size: .81rem;
+  line-height: 1.48;
+}
+.samhaal-how-scroll-note {
+  margin: 0 8px 0;
+  color: #789187;
+  font-size: .81rem;
+  letter-spacing: .01em;
+}
+.samhaal-how-scroll .samhaal-how-stage {
+  position: sticky;
+  z-index: 3;
+  top: clamp(78px, 10svh, 112px);
+  align-self: start;
+  height: min(79svh, 810px);
+  min-height: 420px;
+  overflow: hidden;
+  padding: clamp(15px, 1.8vw, 26px);
+}
+.samhaal-how-scroll .samhaal-how-stage-art {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.samhaal-how-scroll .samhaal-how-image-wrap {
+  overflow: hidden;
+}
+.samhaal-how-scroll .samhaal-how-caption {
+  flex: 0 0 auto;
+  padding: 7px 9px 10px;
+}
+.samhaal-how-scroll .samhaal-how-caption h3 {
+  font-size: clamp(1.5rem, 2.45vw, 2.35rem);
+}
+.samhaal-how-scroll .samhaal-how-caption p {
+  font-size: clamp(.88rem, 1vw, .99rem);
+  line-height: 1.45;
+}
+.samhaal-how-scroll .samhaal-how-stage-foot {
+  padding: 12px 3px 0;
+}
+.samhaal-how-scroll .samhaal-how-tab:focus-visible {
+  outline: 3px solid #07996b;
+  outline-offset: 3px;
+}
+@media (max-width: 980px) and (min-width: 761px) {
+  .samhaal-how-scroll-step {min-height: 72svh;}
+  .samhaal-how-scroll .samhaal-how-stage {min-height: 390px;}
+  .samhaal-how-step-content h3 {font-size:clamp(1.9rem,3.8vw,3rem);}
+}
+@media (max-width: 760px) {
+  .samhaal-how-scroll {
+    padding: 76px 16px 70px;
+  }
+  .samhaal-how-scroll .samhaal-how-interface {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    align-items: stretch;
+  }
+  .samhaal-how-scroll .samhaal-how-stage {
+    order: -1;
+    top: 64px;
+    height: clamp(285px, 47svh, 470px);
+    min-height: 0;
+    width: 100%;
+    padding: 11px;
+    border-radius: 22px;
+    background: rgba(255,255,255,.98);
+    box-shadow: 0 12px 45px rgba(12,69,38,.10);
+  }
+  .samhaal-how-scroll .samhaal-how-stage-top {font-size: .57rem;}
+  .samhaal-how-scroll .samhaal-how-stage-art {
+    margin: 8px 0;
+    min-height: 0;
+    flex: 1;
+    border-radius: 14px;
+  }
+  .samhaal-how-scroll .samhaal-how-image-wrap {padding: 4px;}
+  .samhaal-how-scroll .samhaal-how-image {
+    max-height: 100%;
+    max-width: 96%;
+  }
+  .samhaal-how-scroll .samhaal-how-caption {display: none;}
+  .samhaal-how-scroll .samhaal-how-stage-foot {padding: 8px 2px 0;}
+  .samhaal-how-scroll .samhaal-how-navigation {
+    order: 1;
+    padding-top: 24px;
+  }
+  .samhaal-how-scroll .samhaal-how-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .samhaal-how-scroll .samhaal-how-track {margin: 11px 2px 0;}
+  .samhaal-how-scroll-step {
+    min-height: 65svh;
+    padding: 45px 5px 38px;
+    transform: none;
+    opacity: .65;
+  }
+  .samhaal-how-scroll .samhaal-how-tab {
+    min-height: 0;
+    padding: 14px;
+    border-radius: 14px;
+    gap: 10px;
+    display: grid;
+    grid-template-columns: 31px 1fr 20px;
+    align-items: center;
+    flex-direction: unset;
+  }
+  .samhaal-how-scroll .samhaal-how-tab.is-active {
+    transform: none;
+  }
+  .samhaal-how-scroll .samhaal-how-tab-text strong {font-size: 1.13rem;}
+  .samhaal-how-scroll .samhaal-how-tab-text small {display: block; font-size: .77rem;}
+  .samhaal-how-scroll .samhaal-how-tab-arrow {display: block;}
+  .samhaal-how-step-content {padding: 20px 10px 0;}
+  .samhaal-how-step-content h3 {
+    font-size: clamp(2.2rem, 9vw, 3.7rem);
+    margin: 13px 0 13px;
+  }
+  .samhaal-how-step-content p {font-size: .99rem; line-height: 1.55;}
+  .samhaal-how-step-note {margin-top: 20px;}
+  .samhaal-how-scroll-note {margin-top: 0;}
+}
+@media (max-width: 380px) {
+  .samhaal-how-scroll .samhaal-how-stage {
+    top: 61px;
+    height: clamp(260px, 43svh, 370px);
+  }
+  .samhaal-how-scroll-step {min-height: 72svh;}
+  .samhaal-how-step-content h3 {font-size: 2rem;}
+}
+@media (prefers-reduced-motion: reduce) {
+  .samhaal-how-scroll-step,
+  .samhaal-how-scroll-step.is-active {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
