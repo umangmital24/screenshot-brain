@@ -74,70 +74,85 @@ function prefersReducedMotion() {
 
 export default function HowItWorksExperience() {
   const [active, setActive] = useState(0)
-  const [playing, setPlaying] = useState(false)
   const [reduceMotion, setReduceMotion] = useState(prefersReducedMotion)
+  const stepRefs = useRef([])
   const buttonsRef = useRef([])
+  const frameRef = useRef(0)
   const current = STEPS[active]
 
   useEffect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const onChange = () => {
-      setReduceMotion(query.matches)
-      if (query.matches) setPlaying(false)
-    }
-    onChange()
-    query.addEventListener?.('change', onChange)
-    return () => query.removeEventListener?.('change', onChange)
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const updateMotion = () => setReduceMotion(media.matches)
+    updateMotion()
+    media.addEventListener?.('change', updateMotion)
+    return () => media.removeEventListener?.('change', updateMotion)
   }, [])
 
   useEffect(() => {
-    if (!playing || reduceMotion) return undefined
-    if (active === STEPS.length - 1) {
-      setPlaying(false)
-      return undefined
+    // The active chapter is the step closest to the reader's sightline.
+    // On mobile the sticky visual occupies the upper half of the screen,
+    // so the sightline moves down into the readable step text.
+    const update = () => {
+      frameRef.current = 0
+      const mobile = window.matchMedia('(max-width: 760px)').matches
+      const targetLine = innerHeight * (mobile ? .79 : .5)
+      let closest = 0
+      let best = Infinity
+      stepRefs.current.forEach((node, index) => {
+        if (!node) return
+        const rect = node.getBoundingClientRect()
+        const distance = Math.abs(rect.top + rect.height / 2 - targetLine)
+        if (distance < best) { best = distance; closest = index }
+      })
+      setActive(previous => previous === closest ? previous : closest)
     }
-    const timer = window.setTimeout(() => setActive((value) => Math.min(value + 1, STEPS.length - 1)), 3600)
-    return () => window.clearTimeout(timer)
-  }, [active, playing, reduceMotion])
+    const onScroll = () => {
+      if (frameRef.current) return
+      frameRef.current = requestAnimationFrame(update)
+    }
+    update()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+      if (frameRef.current) cancelAnimationFrame(frameRef.current)
+    }
+  }, [])
 
   const selectStep = (index) => {
-    setPlaying(false)
+    const node = stepRefs.current[index]
     setActive(index)
+    if (!node) return
+    const mobile = window.matchMedia('(max-width: 760px)').matches
+    const rect = node.getBoundingClientRect()
+    const sightline = innerHeight * (mobile ? .79 : .5)
+    const scrollTop = window.scrollY + rect.top + rect.height / 2 - sightline
+    window.scrollTo({ top: Math.max(0, scrollTop), behavior: reduceMotion ? 'auto' : 'smooth' })
   }
 
   const handleStepKeyDown = (event, index) => {
     let next
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-      next = (index + 1) % STEPS.length
-    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-      next = (index - 1 + STEPS.length) % STEPS.length
-    } else if (event.key === 'Home') {
-      next = 0
-    } else if (event.key === 'End') {
-      next = STEPS.length - 1
-    } else {
-      return
-    }
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % STEPS.length
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (index - 1 + STEPS.length) % STEPS.length
+    else if (event.key === 'Home') next = 0
+    else if (event.key === 'End') next = STEPS.length - 1
+    else return
     event.preventDefault()
     selectStep(next)
-    buttonsRef.current[next]?.focus()
-  }
-
-  const replay = () => {
-    setActive(0)
-    setPlaying(!reduceMotion)
+    buttonsRef.current[next]?.focus({ preventScroll: true })
   }
 
   return (
-    <section id="how-it-works" className="samhaal-how" aria-labelledby="samhaal-how-heading">
+    <section id="how-it-works" className="samhaal-how samhaal-how-scroll" aria-labelledby="samhaal-how-heading">
       <div className="samhaal-how-container">
         <header className="samhaal-how-intro">
-          <span className="samhaal-how-eyebrow"><span aria-hidden="true">✳</span> HOW IT WORKS · THE SHORT VERSION</span>
+          <span className="samhaal-how-eyebrow"><span aria-hidden="true">✳</span> HOW IT WORKS · FOLLOW THE FLOW</span>
           <div className="samhaal-how-intro-grid">
             <h2 id="samhaal-how-heading">Save the moment.<br /><em>Find it later.</em></h2>
             <div className="samhaal-how-intro-aside">
               <p>Four small steps. A lot less time trying to remember where you saw that one thing.</p>
-              <span>Pick a step below and watch the flow.</span>
+              <span>Scroll down to watch each moment unfold.</span>
             </div>
           </div>
         </header>
@@ -153,51 +168,49 @@ export default function HowItWorksExperience() {
               <span style={{ width: ((active + 1) / STEPS.length * 100) + '%' }} />
             </div>
 
-            <div className="samhaal-how-steps" role="tablist" aria-label="How Samhaal works">
+            <div className="samhaal-how-steps" aria-label="Samhaal's four-step product flow">
               {STEPS.map((step, index) => (
-                <button
+                <article
                   key={step.id}
-                  ref={(node) => { buttonsRef.current[index] = node }}
-                  id={'samhaal-how-tab-' + step.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={index === active}
-                  aria-controls="samhaal-how-panel"
-                  tabIndex={index === active ? 0 : -1}
-                  onClick={() => selectStep(index)}
-                  onKeyDown={(event) => handleStepKeyDown(event, index)}
-                  className={'samhaal-how-tab' + (active === index ? ' is-active' : '')}
+                  ref={node => { stepRefs.current[index] = node }}
+                  className={'samhaal-how-scroll-step' + (active === index ? ' is-active' : '')}
+                  aria-label={'Step ' + step.number + ': ' + step.label}
                 >
-                  <span className="samhaal-how-tab-index">{step.number}</span>
-                  <span className="samhaal-how-tab-text">
-                    <strong>{step.label}</strong>
-                    <small>{step.short}</small>
-                  </span>
-                  <span className="samhaal-how-tab-arrow" aria-hidden="true">↗</span>
-                </button>
+                  <button
+                    ref={node => { buttonsRef.current[index] = node }}
+                    id={'samhaal-how-tab-' + step.id}
+                    type="button"
+                    aria-current={active === index ? 'step' : undefined}
+                    onClick={() => selectStep(index)}
+                    onKeyDown={event => handleStepKeyDown(event, index)}
+                    className={'samhaal-how-tab' + (active === index ? ' is-active' : '')}
+                  >
+                    <span className="samhaal-how-tab-index">{step.number}</span>
+                    <span className="samhaal-how-tab-text">
+                      <strong>{step.label}</strong>
+                      <small>{step.short}</small>
+                    </span>
+                    <span className="samhaal-how-tab-arrow" aria-hidden="true">↗</span>
+                  </button>
+                  <div className="samhaal-how-step-content">
+                    <span className="samhaal-how-step-kicker">{step.eyebrow}</span>
+                    <h3>{step.heading}</h3>
+                    <p>{step.description}</p>
+                    <div className="samhaal-how-step-note">
+                      <span aria-hidden="true">✓</span>
+                      <div><strong>{step.detailTitle}</strong><small>{step.detail}</small></div>
+                    </div>
+                  </div>
+                </article>
               ))}
             </div>
-
-            <div className="samhaal-how-manual">
-              <button
-                type="button"
-                onClick={replay}
-                aria-label={reduceMotion ? 'Return to the first step' : 'Play the four-step walkthrough'}
-                className="samhaal-how-play"
-              >
-                <span className="samhaal-how-play-icon" aria-hidden="true">{reduceMotion ? '↺' : '▶'}</span>
-                {reduceMotion ? 'Start from step one' : playing ? 'Playing the flow…' : 'Play the full flow'}
-              </button>
-              <span className="samhaal-how-motion-hint">Or explore at your own pace.</span>
-            </div>
+            <p className="samhaal-how-scroll-note">↓ Keep scrolling, or tap a step to jump there.</p>
           </div>
 
           <div
             className="samhaal-how-stage"
             id="samhaal-how-panel"
-            role="tabpanel"
-            aria-labelledby={'samhaal-how-tab-' + current.id}
-            tabIndex={0}
+            aria-label="Samhaal in action"
           >
             <div className="samhaal-how-stage-top">
               <span><span className="samhaal-how-live-dot" aria-hidden="true" /> IN ACTION</span>
