@@ -1,0 +1,28 @@
+name: Samhaal Website Build
+
+on:
+  push:
+    branches:
+      - feature/samhaal-landing-seo
+    paths:
+      - 'landing_page/**'
+      - '.github/workflows/samhaal-website-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: landing_page
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build React landing page
+        run: npm run build
+      - name: Check generated site
+        run: test -s dist/index.html
