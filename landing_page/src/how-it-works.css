@@ -1,0 +1,521 @@
+/* SAMHAAL / HOW IT WORKS
+   A compact interactive product demo — no CSS-generated phone mockups.
+   Image frames are the original product screenshots stored in /public/story/.
+*/
+.samhaal-how {
+  position: relative;
+  padding: clamp(88px, 10vw, 156px) 24px clamp(78px, 9vw, 138px);
+  background: #f7fcf9;
+  isolation: isolate;
+  color: #111916;
+  overflow: hidden;
+}
+.samhaal-how::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: min(55vw, 740px);
+  aspect-ratio: 1;
+  top: -25%;
+  right: -18%;
+  background: #d7fae7;
+  border-radius: 50%;
+  filter: blur(115px);
+  opacity: .65;
+  pointer-events: none;
+}
+.samhaal-how-container {
+  width: min(100%, 1320px);
+  margin: 0 auto;
+}
+.samhaal-how-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #098a63;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .155em;
+}
+.samhaal-how-eyebrow > span {
+  font-size: 1.35rem;
+  line-height: .7;
+}
+.samhaal-how-intro {
+  margin: 0 0 clamp(35px, 5.8vw, 73px);
+}
+.samhaal-how-intro-grid {
+  display: grid;
+  grid-template-columns: 1.3fr .7fr;
+  gap: clamp(18px, 5vw, 90px);
+  align-items: end;
+  margin-top: 20px;
+}
+.samhaal-how-intro h2 {
+  font-size: clamp(3.1rem, 6.7vw, 7.5rem);
+  line-height: 1.02;
+  letter-spacing: -.072em;
+  font-weight: 850;
+  margin: 0;
+  text-wrap: balance;
+}
+.samhaal-how-intro h2 em {
+  color: #078e64;
+  font-style: normal;
+}
+.samhaal-how-intro-aside {
+  max-width: 350px;
+  padding-bottom: 10px;
+}
+.samhaal-how-intro-aside p {
+  margin: 0 0 20px;
+  font-size: clamp(1.01rem, 1.4vw, 1.28rem);
+  line-height: 1.5;
+  color: #606e66;
+}
+.samhaal-how-intro-aside > span {
+  display: inline-block;
+  padding-top: 13px;
+  border-top: 1px solid #bcd8c9;
+  color: #248261;
+  font-size: .77rem;
+  font-weight: 700;
+  letter-spacing: .01em;
+}
+
+.samhaal-how-interface {
+  display: grid;
+  grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr);
+  gap: clamp(24px, 4vw, 70px);
+  align-items: stretch;
+}
+.samhaal-how-navigation {
+  display: flex;
+  flex-direction: column;
+  padding: clamp(16px, 2vw, 28px) 0;
+  min-width: 0;
+}
+.samhaal-how-nav-head,
+.samhaal-how-stage-top,
+.samhaal-how-stage-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.samhaal-how-nav-head {
+  color: #608172;
+  font-size: .74rem;
+  font-weight: 800;
+  letter-spacing: .135em;
+  padding: 0 4px;
+}
+.samhaal-how-fraction {
+  color: #173f2b;
+  font-size: .89rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .07em;
+}
+.samhaal-how-fraction > span {color: #9bb0a3;}
+.samhaal-how-track {
+  height: 3px;
+  overflow: hidden;
+  background: #d9eae0;
+  border-radius: 10px;
+  margin: 17px 4px 23px;
+}
+.samhaal-how-track > span {
+  display: block;
+  height: 100%;
+  background: #07996b;
+  border-radius: 10px;
+  transition: width .45s cubic-bezier(.22,1,.36,1);
+}
+.samhaal-how-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.samhaal-how-tab {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  text-align: left;
+  background: rgba(255,255,255,.55);
+  border: 1px solid transparent;
+  border-radius: 21px;
+  padding: clamp(17px, 1.85vw, 24px) clamp(14px, 2vw, 24px);
+  color: #101d15;
+  cursor: pointer;
+  transition: transform .28s cubic-bezier(.22,1,.36,1), background .28s, border-color .28s, box-shadow .28s;
+  font: inherit;
+}
+.samhaal-how-tab:not(.is-active):hover {
+  background: #fff;
+  transform: translateX(4px);
+  border-color: #e1f1e7;
+}
+.samhaal-how-tab.is-active {
+  background: #fff;
+  border-color: #bfead2;
+  box-shadow: 0 14px 45px rgba(7,75,43,.065);
+  transform: translateX(7px);
+}
+.samhaal-how-tab:focus-visible,
+.samhaal-how-play:focus-visible,
+.samhaal-how-dot:focus-visible,
+.samhaal-how-cta:focus-visible {
+  outline: 3px solid #03a572;
+  outline-offset: 4px;
+}
+.samhaal-how-tab-index {
+  font-size: .86rem;
+  font-weight: 850;
+  color: #a2b3a8;
+  font-variant-numeric: tabular-nums;
+  align-self: start;
+  padding-top: 2px;
+}
+.samhaal-how-tab.is-active .samhaal-how-tab-index {color: #058e65;}
+.samhaal-how-tab-text {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.samhaal-how-tab-text strong {
+  font-size: clamp(1.35rem, 2vw, 2rem);
+  font-weight: 830;
+  letter-spacing: -.043em;
+  line-height: 1.1;
+}
+.samhaal-how-tab-text small {
+  font-size: clamp(.81rem, 1.13vw, .97rem);
+  color: #798a7f;
+  line-height: 1.36;
+  font-weight: 500;
+}
+.samhaal-how-tab-arrow {
+  justify-self: end;
+  align-self: start;
+  font-size: 1.28rem;
+  color: #b2c5ba;
+  transform: translate(-4px, 4px);
+  transition: color .28s, transform .28s;
+}
+.samhaal-how-tab.is-active .samhaal-how-tab-arrow {
+  color: #078d64;
+  transform: translate(0,0);
+}
+.samhaal-how-manual {
+  margin-top: auto;
+  padding: 25px 5px 3px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+.samhaal-how-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border: 1px solid #143e29;
+  background: #143b2a;
+  color: white;
+  border-radius: 100px;
+  cursor: pointer;
+  font-weight: 720;
+  font-size: .9rem;
+  transition: background-color .22s, transform .22s;
+  font-family: inherit;
+}
+.samhaal-how-play:hover {
+  background: #066f4d;
+  transform: translateY(-2px);
+}
+.samhaal-how-play-icon {
+  font-size: .7rem;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+.samhaal-how-motion-hint {
+  color: #81968a;
+  font-size: .78rem;
+}
+
+.samhaal-how-stage {
+  position: relative;
+  min-width: 0;
+  border-radius: clamp(23px, 3vw, 38px);
+  border: 1px solid #d9eadd;
+  background: linear-gradient(152deg, #ffffff 6%, #f6fff9 92%);
+  padding: clamp(17px, 2vw, 27px);
+  box-shadow: 0 30px 90px rgba(38,101,65,.065);
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+.samhaal-how-stage:focus-visible {outline: 2px solid #029b66;outline-offset: 5px;}
+.samhaal-how-stage-top {
+  z-index: 2;
+  position: relative;
+  font-size: .68rem;
+  font-weight: 750;
+  color: #668277;
+  letter-spacing: .09em;
+}
+.samhaal-how-stage-top > span:first-child {
+  display: inline-flex;
+  gap: 9px;
+  align-items: center;
+}
+.samhaal-how-stage-top strong {
+  font-weight: 850;
+  color: #0e6745;
+}
+.samhaal-how-live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0eb37e;
+  box-shadow: 0 0 0 5px #dcf8e8;
+}
+.samhaal-how-stage-art {
+  flex: 1;
+  min-height: 390px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  margin: 20px 0;
+  border-radius: 25px;
+  background: radial-gradient(circle at 50% 43%, #e7ffef 0%, #f3fff7 40%, #f9fffb 73%);
+  overflow: hidden;
+  isolation: isolate;
+}
+.samhaal-how-orb {
+  position: absolute;
+  border-radius: 50% 55% 40% 60%;
+  background: #cff8dd;
+  opacity: .75;
+  z-index: -1;
+  animation: samhaal-how-float 11s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.samhaal-how-orb-one {
+  width: 49%;
+  aspect-ratio: 1;
+  left: 9%;
+  top: 7%;
+}
+.samhaal-how-orb-two {
+  width: 52%;
+  aspect-ratio: 1;
+  right: -10%;
+  bottom: -13%;
+  background: #b9f5e2;
+  opacity: .48;
+  animation-delay: -3s;
+}
+@keyframes samhaal-how-float {
+  from {transform: translate3d(-8px,8px,0) rotate(-8deg);}
+  to {transform:translate3d(10px,-10px,0) rotate(16deg);}
+}
+.samhaal-how-image-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 17px 18px;
+  z-index: 1;
+}
+.samhaal-how-image {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: 95%;
+  object-fit: contain;
+  filter: drop-shadow(0 22px 26px rgba(14,42,25,.13));
+  animation: samhaal-how-picture-in .7s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes samhaal-how-picture-in {
+  from {opacity: 0; transform: translateY(26px) scale(.95); filter: blur(5px);}
+  to {opacity: 1; transform: translateY(0) scale(1); filter: drop-shadow(0 22px 26px rgba(14,42,25,.13));}
+}
+.samhaal-how-art-marker {
+  position: absolute;
+  right: 5%;
+  bottom: 6%;
+  color: #059a6c;
+  font-size: clamp(14px, 1.6vw, 22px);
+  font-weight: 800;
+  opacity: .42;
+  transform: rotate(-12deg);
+  z-index: 2;
+  pointer-events: none;
+}
+.samhaal-how-art-marker > span {margin-left: 7px;font-size: 1.3em;}
+.samhaal-how-caption {
+  position: relative;
+  z-index: 2;
+  padding: 2px clamp(3px, 1vw, 16px) 18px;
+}
+.samhaal-how-caption-index {
+  color: #0a9166;
+  font-size: .7rem;
+  font-weight: 850;
+  letter-spacing: .15em;
+}
+.samhaal-how-caption h3 {
+  font-size: clamp(1.65rem, 2.7vw, 2.8rem);
+  font-weight: 850;
+  letter-spacing: -.055em;
+  line-height: 1.09;
+  margin: 11px 0 9px;
+}
+.samhaal-how-caption p {
+  color: #68796e;
+  font-size: clamp(.94rem, 1.15vw, 1.08rem);
+  line-height: 1.53;
+  max-width: 590px;
+  margin: 0;
+}
+.samhaal-how-stage-foot {
+  border-top: 1px solid #e4f0e6;
+  padding: 18px 3px 1px;
+  font-weight: 800;
+  font-size: .68rem;
+  color: #7f9c89;
+  letter-spacing: .13em;
+}
+.samhaal-how-dots {display: flex;align-items: center;gap: 7px;}
+.samhaal-how-dot {
+  height: 7px;
+  width: 19px;
+  padding: 0;
+  border: 0;
+  background: #d7e5dc;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: width .25s, background-color .25s;
+}
+.samhaal-how-dot.is-active {width: 34px;background:#069a69;}
+.samhaal-how-bottom {
+  padding: clamp(25px, 3vw, 44px) 8px 0;
+  margin-top: clamp(22px, 3vw, 37px);
+  border-top: 1px solid #d9eade;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.samhaal-how-bottom-copy {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: clamp(.93rem, 1.16vw, 1.08rem);
+  color: #536f5f;
+}
+.samhaal-how-bottom-copy strong {color: #193c29;font-weight: 850;}
+.samhaal-how-bottom-mark {
+  color: #078b62;
+  display: inline-grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  border: 1px solid #cbead8;
+  border-radius: 50%;
+  font-size: 1.3rem;
+  flex: 0 0 auto;
+}
+.samhaal-how-cta {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 23px;
+  text-decoration: none;
+  padding: 14px 20px;
+  border-radius: 100px;
+  background: #111b15;
+  color: white !important;
+  font-size: .89rem;
+  font-weight: 800;
+  transition: background .22s, transform .22s;
+}
+.samhaal-how-cta:hover {background: #077d58;transform:translateY(-3px);}
+
+@media (max-width: 1020px) {
+  .samhaal-how-interface {grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr);gap:20px;}
+  .samhaal-how-tab {gap:9px;padding:16px 12px;grid-template-columns:29px minmax(0,1fr) 19px;}
+  .samhaal-how-tab-text strong {font-size:1.35rem;}
+  .samhaal-how-stage-art {min-height:360px;}
+  .samhaal-how-intro-grid {grid-template-columns: 1fr .65fr;}
+}
+
+@media (max-width: 760px) {
+  .samhaal-how {padding:77px 18px 85px;}
+  .samhaal-how-intro {margin-bottom:27px;}
+  .samhaal-how-intro-grid {display:block;margin-top:13px;}
+  .samhaal-how-intro h2 {font-size:clamp(2.75rem,10vw,4.6rem);}
+  .samhaal-how-intro-aside {max-width:540px;padding:0;margin-top:18px;}
+  .samhaal-how-intro-aside p {font-size:1rem;line-height:1.55;margin-bottom:12px;}
+  .samhaal-how-intro-aside > span {font-size:.74rem;padding-top:10px;}
+  .samhaal-how-interface {display:flex;flex-direction:column;gap:22px;}
+  .samhaal-how-navigation {padding:0;}
+  .samhaal-how-track {margin:12px 2px 14px;}
+  .samhaal-how-steps {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;}
+  .samhaal-how-tab {
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:8px;
+    min-height:75px;
+    border-radius:13px;
+    padding:12px 8px;
+  }
+  .samhaal-how-tab.is-active {transform:translateY(-3px);}
+  .samhaal-how-tab:not(.is-active):hover {transform:none;}
+  .samhaal-how-tab-index {font-size:.73rem;}
+  .samhaal-how-tab-text strong {font-size:clamp(.82rem,2.9vw,1.1rem);letter-spacing:-.03em;}
+  .samhaal-how-tab-text small,
+  .samhaal-how-tab-arrow {display:none;}
+  .samhaal-how-manual {margin-top:14px;padding:0;gap:10px;}
+  .samhaal-how-play {padding:10px 14px;font-size:.82rem;}
+  .samhaal-how-motion-hint {font-size:.7rem;}
+  .samhaal-how-stage {padding:12px;border-radius:24px;}
+  .samhaal-how-stage-top {font-size:.59rem;padding:2px 3px;}
+  .samhaal-how-stage-art {min-height:clamp(300px,61svh,490px);margin:13px 0;border-radius:16px;}
+  .samhaal-how-image-wrap {padding:8px;}
+  .samhaal-how-image {max-width:95%;}
+  .samhaal-how-caption {padding:4px 6px 14px;}
+  .samhaal-how-caption h3 {font-size:clamp(1.7rem,6.1vw,2.6rem);margin:7px 0;}
+  .samhaal-how-caption p {font-size:.92rem;line-height:1.5;}
+  .samhaal-how-stage-foot {padding:12px 4px 2px;font-size:.59rem;}
+  .samhaal-how-bottom {flex-direction:column;align-items:flex-start;padding:23px 0 0;gap:18px;}
+  .samhaal-how-cta {width:100%;justify-content:space-between;}
+}
+
+@media (max-width: 370px) {
+  .samhaal-how {padding-left:13px;padding-right:13px;}
+  .samhaal-how-intro h2 {font-size:2.56rem;}
+  .samhaal-how-tab {padding:9px 5px;min-height:65px;}
+  .samhaal-how-tab-text strong {font-size:.79rem;}
+  .samhaal-how-stage-art {min-height:320px;}
+  .samhaal-how-caption h3 {font-size:1.55rem;}
+  .samhaal-how-motion-hint {display:none;}
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .samhaal-how *, .samhaal-how *::before, .samhaal-how *::after {
+    animation: none !important;
+    transition-duration: .01ms !important;
+  }
+}
