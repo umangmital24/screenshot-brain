@@ -36,6 +36,9 @@
         </div>
       </section>
 
+      {/* Motion-led 7-frame Samhaal product story */}
+      <StoryboardScroller />
+
       {/* The Core Problem: The Screenshot Graveyard */}
       <section id="problem" className="landing-section">
         <div className="landing-container">
