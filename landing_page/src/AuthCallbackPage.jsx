@@ -44,7 +44,7 @@ export default function AuthCallbackPage() {
 
   return (
     <main className="portal-shell">
-      <header className="portal-topbar"><a className="portal-brand" href="/">Samhaal <span>संभाल</span></a></header>
+      <header className="portal-topbar"><a className="portal-brand portal-brand-with-logo" href="/"><img className="portal-brand-logo" src="/samhaal-logo.svg" alt="" /> <span>Samhaal <span>संभाल</span></span></a></header>
       <section className="portal-auth-card" aria-live="polite">
         <p className="portal-eyebrow">ACCOUNT AUTHENTICATION</p>
         <h1>{error ? 'Sign-in failed.' : 'Signing you in…'}</h1>
