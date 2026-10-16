@@ -21,15 +21,11 @@ def _memory_payload(memory: dict) -> dict:
     }
 
 
-def generate_grounded_answer(
-    question: str,
-    memories: list[dict],
-    history: list[Any] | None = None,
-) -> tuple[str, dict]:
-    """Answer a reasoning-style Ask query using only retrieved Samhaal memories."""
+
+def _prepare_grounded_request(question: str, memories: list[dict], history: list[Any] | None = None):
+    """Use the exact same grounding instructions for normal and streamed replies."""
     if not memories:
         raise ValueError("Grounded answer generation requires retrieved memories")
-
     recent_history = []
     for turn in (history or [])[-6:]:
         role = getattr(turn, "role", None) or (turn.get("role") if isinstance(turn, dict) else None)
@@ -70,10 +66,21 @@ SAVED MEMORIES:
         budget = int(os.environ.get("GEMINI_CHAT_THINKING_BUDGET", "512"))
         config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=budget)
 
+
+    return client, model, prompt, types.GenerateContentConfig(**config_kwargs)
+
+
+def generate_grounded_answer(
+    question: str,
+    memories: list[dict],
+    history: list[Any] | None = None,
+) -> tuple[str, dict]:
+    """Answer a reasoning-style Ask query using only retrieved Samhaal memories."""
+    client, model, prompt, config = _prepare_grounded_request(question, memories, history)
     response = client.models.generate_content(
         model=model,
         contents=[prompt],
-        config=types.GenerateContentConfig(**config_kwargs),
+        config=config,
     )
     answer = (response.text or "").strip()
     if not answer:
@@ -82,3 +89,27 @@ SAVED MEMORIES:
     usage = _usage_metadata(response)
     usage["model"] = model
     return answer, usage
+
+def iter_grounded_answer_chunks(
+    question: str,
+    memories: list[dict],
+    history: list[Any] | None = None,
+):
+    """Yield real Gemini deltas followed by usage; never fake token typing."""
+    client, model, prompt, config = _prepare_grounded_request(question, memories, history)
+    streamed_usage: dict = {"model": model}
+    for response in client.models.generate_content_stream(
+        model=model,
+        contents=[prompt],
+        config=config,
+    ):
+        # Some Gemini chunks carry only thinking/usage metadata.
+        if response.usage_metadata:
+            streamed_usage.update(_usage_metadata(response))
+        try:
+            piece = response.text or ""
+        except (ValueError, AttributeError):
+            piece = ""
+        if piece:
+            yield {"type": "token", "text": piece}
+    yield {"type": "usage", "data": streamed_usage}
