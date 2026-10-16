@@ -131,3 +131,8 @@
 /* Passwordless fallback while browser Google OAuth is not authorized. */
 .portal-email-hint { margin: 0; font-size: 11px; color: #707070; line-height: 1.6; }
 .portal-auth-card .portal-email-hint { margin: 0 0 6px; }
+
+/* Brand lockup: use the official uploaded Samhaal leaf on web pages. */
+.portal-brand-with-logo{display:inline-flex;align-items:center;gap:10px;white-space:nowrap}
+.portal-brand-logo{display:block;width:30px;height:30px;object-fit:contain;border-radius:8px}
+.portal-brand-with-logo>span{display:inline-flex;align-items:baseline;gap:5px}
