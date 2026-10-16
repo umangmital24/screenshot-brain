@@ -70,3 +70,20 @@ The home page includes a sticky, seven-chapter interactive story driven by `src/
 The seven original phone screenshots are now included at `public/story/01.webp` through `public/story/07.webp`. The CSS imitation phone and its overlapping cards have been removed. The story uses a minimal brand placeholder only if a file fails to load.
 
 The primary navigation now links to `#story`. Existing FAQ, waitlist, and metadata are preserved. A GitHub Actions workflow (`.github/workflows/samhaal-website-build.yml`) checks Vite builds on changes to this branch.
+
+## Samhaal Web login and Android download
+
+- The landing-page header and mobile menu now link to `/login` and `/get-app`.
+- `/login` uses the **same Supabase Auth project** as Android: Google OAuth and email/password.
+- `/auth/callback` exchanges the PKCE OAuth code for a web session.
+- After sign-in, `/dashboard` lists saved memory metadata and supports text search, intent/status filters, completion updates and Ask Samhaal through the existing FastAPI backend.
+- Screenshots are **not uploaded, backed up, or rendered** in the web experience.
+- `/get-app` displays an Android download coming-soon message until the APK URL is configured with `VITE_ANDROID_APK_URL`. Set it to a hosted HTTPS APK or a same-site `/downloads/...` asset, then redeploy.
+
+### Required deployment configuration
+
+Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (public publishable key), and `VITE_API_BASE` in Vercel. Use the **same Supabase project** as the Android app. Do not expose Supabase service-role keys to the frontend.
+
+In Supabase Auth settings, allow `https://YOUR-WEB-DOMAIN/auth/callback` as an OAuth/email redirect URL, and configure the Google provider appropriately. Configure FastAPI `ALLOWED_ORIGINS` to include the exact web origin (and your local Vite dev origin). The web app sends Supabase access tokens in Authorization Bearer headers to the existing protected API routes.
+
+The existing waitlist and marketing story remain unchanged. The `prebuild` reconstructs `LandingPage.jsx` from `src/fragments/LandingPage.part*.txt`: **edit the fragment**, not the generated JSX, for future landing-page navigation changes.
