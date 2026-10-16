@@ -77,23 +77,21 @@
           </p>
 
           <div className="landing-hero-cta-group">
-            <button className="landing-hero-btn-primary" onClick={(e) => handleNavClick(e, 'waitlist')}>
-              <span>Join the Early Access Waitlist</span>
+            <a href="/get-app" className="landing-hero-btn-primary">
+              <span>Get the Android App</span>
               <LandingIcons.ArrowRight />
-            </button>
-            <a href="#early-access" className="landing-hero-btn-secondary" onClick={(e) => handleNavClick(e, 'early-access')}>
-              <span>See Early Access Plan</span>
+            </a>
+            <a href="/login" className="landing-hero-btn-secondary">
+              <span>Open Samhaal Web</span>
             </a>
           </div>
 
           <div className="landing-hero-guarantees">
-            <span>✓ Early access will be free</span>
+            <span>✓ Your memories, accessible on the web</span>
             <span className="guarantee-sep">•</span>
-            <span>Selective share or auto-capture</span>
+            <span>On-device screenshot OCR</span>
             <span className="guarantee-sep">•</span>
-            <span>100% on-device privacy mode</span>
-            <span className="guarantee-sep">•</span>
-            <span>Windows beta first</span>
+            <span>Original screenshots stay on Android</span>
           </div>
 
           {/* Interactive Live-Look Product Preview */}
