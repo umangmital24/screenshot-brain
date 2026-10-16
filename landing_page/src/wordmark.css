@@ -23,3 +23,13 @@
   letter-spacing: 0;
   color: #777777;
 }
+
+/* Official Samhaal leaf logo, sized for both the light navigation and dark footer. */
+.landing-brand-wordmark .samhaal-landing-logo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  display: block;
+  border-radius: 9px;
+  flex-shrink: 0;
+}
