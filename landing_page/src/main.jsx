@@ -11,6 +11,11 @@ import './typography.css'
 import LandingPage from './LandingPage'
 import AboutPage from './AboutPage'
 import PrivacyPage from './PrivacyPage'
+import LoginPage from './LoginPage'
+import DashboardPage from './DashboardPage'
+import GetAppPage from './GetAppPage'
+import AuthCallbackPage from './AuthCallbackPage'
+import './web-portal.css'
 import { Analytics } from '@vercel/analytics/react'
 
 function AppRouter() {
@@ -18,6 +23,10 @@ function AppRouter() {
 
   if (path === '/about') return <AboutPage />
   if (path === '/privacy') return <PrivacyPage />
+  if (path === '/login') return <LoginPage />
+  if (path === '/auth/callback') return <AuthCallbackPage />
+  if (path === '/dashboard') return <DashboardPage />
+  if (path === '/get-app') return <GetAppPage />
   return <LandingPage />
 }
 
