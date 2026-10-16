@@ -1,11 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
+
+// Matches GOOGLE_WEB_CLIENT_ID in Android's LoginScreen.js on main.
+// This is a public OAuth Client ID, not a Google Client Secret.
+const GOOGLE_WEB_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID?.trim() ||
+  '295083436259-48boa1abgmoq9jla0nr58rhmh6v06if0.apps.googleusercontent.com'
 
 export default function LoginPage() {
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [working, setWorking] = useState(false)
+  const [googleWorking, setGoogleWorking] = useState(false)
+  const [googleReady, setGoogleReady] = useState(false)
+  const googleButtonRef = useRef(null)
   const [message, setMessage] = useState('')
   const [notice, setNotice] = useState('')
 
@@ -48,21 +57,82 @@ export default function LoginPage() {
     }
   }
 
-  async function handleGoogle() {
-    if (!supabase || working) return
-    setWorking(true)
-    setMessage('')
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: window.location.origin + '/auth/callback' },
-      })
-      if (error) throw error
-    } catch (error) {
-      setMessage(error?.message || 'Google sign-in failed.')
-      setWorking(false)
+  // Google Identity Services returns an ID token directly. This is the same
+  // Supabase Auth path the Android app uses; it does not rely on Google's
+  // OAuth authorization-code exchange or the server-side Client Secret.
+  useEffect(() => {
+    if (!supabase || !GOOGLE_WEB_CLIENT_ID) return
+    let active = true
+    const container = googleButtonRef.current
+    const scriptId = 'samhaal-google-identity-script'
+
+    async function onGoogleCredential(response) {
+      if (!active || !response?.credential) {
+        if (active) setMessage('Google did not return a sign-in token. Please try again.')
+        return
+      }
+      setGoogleWorking(true)
+      setMessage('')
+      try {
+        const { error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: response.credential,
+        })
+        if (error) throw error
+        if (active) window.location.replace('/dashboard')
+      } catch (error) {
+        if (active) {
+          setMessage(error?.message || 'Google sign-in failed. Please try again.')
+          setGoogleWorking(false)
+        }
+      }
     }
-  }
+
+    function initializeGoogle() {
+      if (!active || !container || !window.google?.accounts?.id) return
+      container.replaceChildren()
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_WEB_CLIENT_ID,
+        callback: onGoogleCredential,
+        auto_select: false,
+        context: 'signin',
+      })
+      window.google.accounts.id.renderButton(container, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        shape: 'rectangular',
+        text: 'continue_with',
+        width: Math.min(370, Math.max(220, container.clientWidth || 320)),
+      })
+      setGoogleReady(true)
+    }
+
+    if (window.google?.accounts?.id) {
+      initializeGoogle()
+    } else {
+      let script = document.getElementById(scriptId)
+      if (!script) {
+        script = document.createElement('script')
+        script.id = scriptId
+        script.src = 'https://accounts.google.com/gsi/client'
+        script.async = true
+        script.defer = true
+        document.head.appendChild(script)
+      }
+      script.addEventListener('load', initializeGoogle)
+      script.addEventListener('error', () => {
+        if (active) setMessage('Google sign-in could not load. Check your browser or try email sign-in.')
+      })
+      return () => {
+        active = false
+        script.removeEventListener('load', initializeGoogle)
+        container?.replaceChildren()
+      }
+    }
+    return () => { active = false; container?.replaceChildren() }
+  }, [])
+
 
   return (
     <main className="portal-shell">
@@ -78,9 +148,9 @@ export default function LoginPage() {
           <p className="portal-error" role="alert">Web login has not been configured yet. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for this deployment.</p>
         ) : (
           <>
-            <button className="portal-button portal-google" type="button" disabled={working} onClick={handleGoogle}>
-              Continue with Google
-            </button>
+            <div className="portal-google-slot" ref={googleButtonRef} aria-label="Continue with Google" />
+            {!googleReady && !message && <p className="portal-google-loading">Loading Google sign-in…</p>}
+            {googleWorking && <p className="portal-google-loading" role="status">Signing you in with Google…</p>}
             <div className="portal-divider">or continue with email</div>
             <form className="portal-form" onSubmit={handleEmail}>
               <label htmlFor="samhaal-email">Email address</label>
