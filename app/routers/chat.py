@@ -152,7 +152,7 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
 
 def _sse_event(kind: str, **data) -> str:
     """Server-Sent Events frame, consumable through POST fetch() streaming."""
-    return "data: " + json.dumps({"type": kind, **data}, ensure_ascii=False) + "\\n\\n"
+    return "data: " + json.dumps({"type": kind, **data}, ensure_ascii=False) + "\n\n"
 
 
 @router.post("/stream")
