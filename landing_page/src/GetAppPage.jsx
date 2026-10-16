@@ -5,7 +5,7 @@ export default function GetAppPage() {
   return (
     <main className="portal-shell">
       <header className="portal-topbar">
-        <a className="portal-brand" href="/">Samhaal <span>संभाल</span></a>
+        <a className="portal-brand portal-brand-with-logo" href="/"><img className="portal-brand-logo" src="/samhaal-logo.svg" alt="" /> <span>Samhaal <span>संभाल</span></span></a>
         <a href="/login" className="portal-text-link">Log in →</a>
       </header>
       <section className="portal-auth-card portal-download-card">
