@@ -162,7 +162,8 @@
 .memory-universe-vault {
   position: absolute;
   left: 50%;
-  top: 46%;
+  /* Align the privacy ring with the logo, not the logo + text stack. */
+  top: calc(46% - 11px);
   width: 143px;
   height: 143px;
   border: 1px dashed rgba(255,255,255,.68);
@@ -184,8 +185,11 @@
   position: absolute;
   width: 31px;
   height: 31px;
-  bottom: -11px;
-  left: calc(50% - 15px);
+  /* Keep the badge on the ring's right edge, away from the brand label. */
+  top: calc(50% - 15.5px);
+  right: -12px;
+  bottom: auto;
+  left: auto;
   background: #27272f;
   color: #fff;
   border: 1px solid #73737c;
@@ -335,7 +339,7 @@
     width:89px;height:89px;top:50%;
   }
   .memory-universe--compact .memory-universe-vault svg {
-    width:23px;height:23px;bottom:-7px;left:calc(50% - 11.5px);padding:5px;
+    width:23px;height:23px;top:calc(50% - 11.5px);right:-8px;bottom:auto;left:auto;padding:5px;
   }
   .memory-universe--compact .memory-universe-orbit--one {width:95px;top:50%;}
   .memory-universe--compact .memory-universe-orbit--two {width:150px;top:50%;}
