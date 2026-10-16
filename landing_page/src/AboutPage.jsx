@@ -81,11 +81,14 @@ export default function AboutPage() {
         </section>
 
         <section style={{ marginTop: 72, padding: '38px 40px', background: '#111', color: '#fff', borderRadius: 22 }}>
-          <h2 style={{ fontSize: 30, margin: '0 0 12px', letterSpacing: '-0.025em' }}>Samhaal is currently being validated with early users.</h2>
+          <h2 style={{ fontSize: 30, margin: '0 0 12px', letterSpacing: '-0.025em' }}>Your memories, available wherever you work.</h2>
           <p style={{ margin: '0 0 24px', color: '#c9c9c9', lineHeight: 1.7, fontSize: 17 }}>
-            If screenshot overload sounds familiar, join the waitlist and help shape what Samhaal becomes.
+            Open your Samhaal memory library on the web, or find out when the Android download is available.
           </p>
-          <a href="/#waitlist" style={{ display: 'inline-block', background: '#fff', color: '#111', padding: '12px 18px', borderRadius: 10, textDecoration: 'none', fontWeight: 700 }}>Join the waitlist</a>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <a href="/login" style={{ display: 'inline-block', background: '#fff', color: '#111', padding: '12px 18px', borderRadius: 10, textDecoration: 'none', fontWeight: 700 }}>Open Samhaal Web →</a>
+            <a href="/get-app" style={{ display: 'inline-block', border: '1px solid #555', color: '#fff', padding: '12px 18px', borderRadius: 10, textDecoration: 'none', fontWeight: 700 }}>Get Android App →</a>
+          </div>
         </section>
       </main>
     </div>
