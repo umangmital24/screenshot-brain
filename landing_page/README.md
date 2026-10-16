@@ -112,3 +112,24 @@ In Supabase Auth settings, allow `https://YOUR-WEB-DOMAIN/auth/callback` as an O
 Note: the public `/waitlist` form uses the FastAPI `/waitlist` endpoint and its server-side Supabase connection, so working waitlist submissions do **not** mean browser Supabase Auth is configured. Google login on web additionally requires the site's `/auth/callback` URL to be allowlisted in Supabase Auth.
 
 The existing waitlist and marketing story remain unchanged. The `prebuild` reconstructs `LandingPage.jsx` from `src/fragments/LandingPage.part*.txt`: **edit the fragment**, not the generated JSX, for future landing-page navigation changes.
+
+### Google sign-in without the OAuth Client Secret exchange
+
+The web login uses Google Identity Services (GIS) to obtain a Google **ID token**,
+then `supabase.auth.signInWithIdToken({ provider: 'google', token })`, matching
+the existing Android sign-in path. It reuses the **public Web Client ID** from
+`android_app/src/screens/LoginScreen.js` on `main`.
+`VITE_GOOGLE_WEB_CLIENT_ID` is an optional override for future rotations.
+Do not put any Google Client Secret in frontend code or Vercel public variables.
+
+In Google Cloud Console > Google Auth Platform > Clients > the **Web**
+OAuth Client matching Android's `GOOGLE_WEB_CLIENT_ID`, add
+`https://samhaal.vercel.app` to **Authorized JavaScript origins**.
+This browser-origin requirement is independent of the Android client.
+The Supabase Google provider must include that Web Client ID among
+its allowed Client IDs. The existing mobile Google sign-in being functional
+does not prove the browser origin is registered.
+
+This ID-token approach avoids the failing Google authorization-code exchange
+(the invalid Client Secret error in Supabase Auth logs). Email/password
+authentication and callback handling for email confirmation are unchanged.
