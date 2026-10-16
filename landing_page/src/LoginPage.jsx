@@ -80,7 +80,7 @@ export default function LoginPage() {
   return (
     <main className="portal-shell">
       <header className="portal-topbar">
-        <a className="portal-brand" href="/">Samhaal <span>संभाल</span></a>
+        <a className="portal-brand portal-brand-with-logo" href="/"><img className="portal-brand-logo" src="/samhaal-logo.svg" alt="" /> <span>Samhaal <span>संभाल</span></span></a>
         <a href="/get-app" className="portal-text-link">Get App →</a>
       </header>
       <section className="portal-auth-card" aria-labelledby="login-title">
