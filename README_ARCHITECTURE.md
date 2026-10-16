@@ -34,6 +34,14 @@ Native SQLite stores pending capture outbox rows keyed by `client_event_id` and 
 
 ## Source of truth
 
-Production backend branch: `backend-web-launch-hardening`.
+Production backend/API source of truth: `main`. Deploy the FastAPI service from
+this branch. The website frontend is maintained separately in
+`feature/samhaal-landing-seo` under `landing_page/`.
 
-`main` should be kept fast-forwarded to the same production-ready commit after validation.
+The historical `backend-web-launch-hardening` branch is not the website's
+deployment source. Avoid unintentionally merging its divergent code into `main`
+when making frontend-only updates.
+
+Both deployments must use the same Supabase project. Set `VITE_API_BASE` on
+the web deployment to the public URL of the FastAPI service deployed from
+`main`; set the exact website origin in the backend's `ALLOWED_ORIGINS`.
