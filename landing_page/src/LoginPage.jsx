@@ -9,30 +9,34 @@ import { supabase } from './supabaseClient'
  * Samhaal's playful memory companion. It tracks pointer position, focus and
  * non-sensitive auth status only. It never reads email or password text.
  */
-function MemoryCompanion({ attention, feedback, compact = false }) {
+function MemoryCompanion({ attention, feedback, passwordVisible = false, compact = false }) {
   const sceneRef = useRef(null)
   const clearReactionRef = useRef(null)
   const nextReactionRef = useRef(0)
   const [reaction, setReaction] = useState(null)
 
-  const secret = attention === 'password'
-  const reading = attention === 'email'
-  const mood = secret ? 'secret' : reaction?.mood || (feedback === 'sent' ? 'happy' : feedback === 'error' ? 'surprised' : reading ? 'curious' : 'idle')
+  // Peeking is opt-in: Memo only peeks when the user has explicitly
+  // revealed the password. Password content is never passed to Memo.
+  const peeking = passwordVisible
+  const secret = attention === 'password' && !peeking
+  const reading = attention === 'email' && !peeking
+  const mood = peeking ? 'peek' : secret ? 'secret' : reaction?.mood || (feedback === 'sent' ? 'happy' : feedback === 'error' ? 'surprised' : reading ? 'curious' : 'idle')
   const prompts = {
     idle: ['Meet Memo, your memory buddy!', 'Tap Memo or a floating memory to play.'],
     curious: ['Ooh, hello there!', 'I love meeting familiar memories.'],
     secret: ['No peeking. Promise!', 'Your password is for your eyes only.'],
+    peek: ['Just one tiny peek… 👀', 'Oops! You caught Memo looking.'],
     happy: ['A little happiness, saved! ✦', 'Memo is doing a happy dance.'],
     wink: ['Got it. Remembered!', 'One wink, one more good memory.'],
     surprised: ['Whoa, a new discovery!', 'There is always something to remember.'],
     sleepy: ['Even memories need naps…', 'Tap again to wake Memo up.'],
     proud: ['Memory found! ✦', 'The little things are worth keeping.'],
   }
-  const [title, subtitle] = reaction && !secret
+  const [title, subtitle] = reaction && !secret && !peeking
     ? [reaction.title, reaction.subtitle]
-    : feedback === 'sent' && !secret
+    : feedback === 'sent' && !secret && !peeking
       ? ['Check your inbox! ✦', 'Memo is cheering you on.']
-      : feedback === 'error' && !secret
+      : feedback === 'error' && !secret && !peeking
         ? ['Oops, try once more?', "Memo's still rooting for you."]
         : prompts[mood]
 
@@ -138,6 +142,12 @@ function MemoryCompanion({ attention, feedback, compact = false }) {
               <path d="M168 141Q181 152 192 141" stroke="#2a2a32" strokeWidth="4" strokeLinecap="round" />
             </g>
             <path className="portal-companion-wink-eye" d="M166 141Q180 151 193 141" stroke="#24242a" strokeWidth="4.5" strokeLinecap="round" />
+            <g className="portal-companion-peek-eye">
+              <path d="M169 137Q181 125 194 137" stroke="#303038" strokeWidth="3.5" strokeLinecap="round" />
+              <ellipse cx="181" cy="140" rx="6" ry="7" fill="#292930" />
+              <circle cx="183" cy="137" r="2" fill="#fff" />
+              <path d="M168 144Q180 153 194 144" stroke="#41414a" strokeWidth="2.6" strokeLinecap="round" />
+            </g>
             <g className="portal-companion-eyebrows">
               <path d="M107 111Q119 104 131 109" stroke="#777987" strokeWidth="3" strokeLinecap="round" />
               <path d="M169 109Q182 103 194 112" stroke="#777987" strokeWidth="3" strokeLinecap="round" />
@@ -146,6 +156,7 @@ function MemoryCompanion({ attention, feedback, compact = false }) {
             <path className="portal-companion-happy-smile" d="M132 166Q150 193 169 166Q152 174 132 166Z" fill="#42424b" stroke="#27272a" strokeWidth="2.5" strokeLinejoin="round" />
             <ellipse className="portal-companion-surprise-mouth" cx="150" cy="174" rx="8.5" ry="12" fill="#34343b" />
             <path className="portal-companion-secret-smile" d="M144 174Q150 171 156 174" stroke="#27272a" strokeWidth="3.7" strokeLinecap="round" />
+            <path className="portal-companion-peek-smile" d="M138 169Q152 184 166 165" stroke="#27272a" strokeWidth="3.8" strokeLinecap="round" />
           </g>
           <g className="portal-companion-hands">
             <path d="M67 187C80 169 104 151 120 144C127 141 130 147 125 152C118 159 111 165 105 171L133 153C141 148 146 154 139 161L107 189C90 203 74 206 67 187Z" fill="#d9dce4" stroke="#adb0bc" strokeWidth="2.5" />
@@ -153,7 +164,7 @@ function MemoryCompanion({ attention, feedback, compact = false }) {
           </g>
         </svg>
         <span className="portal-companion-mood" aria-hidden="true">
-          {mood === 'secret' ? '🙈' : mood === 'wink' ? '😉' : mood === 'sleepy' ? '💤' : mood === 'surprised' ? '!' : mood === 'happy' || mood === 'proud' ? '✦' : reading ? '✉' : '♡'}
+          {mood === 'secret' ? '🙈' : mood === 'peek' ? '👀' : mood === 'wink' ? '😉' : mood === 'sleepy' ? '💤' : mood === 'surprised' ? '!' : mood === 'happy' || mood === 'proud' ? '✦' : reading ? '✉' : '♡'}
         </span>
       </button>
 
@@ -169,6 +180,8 @@ export default function LoginPage() {
   const [mode, setMode] = useState('login')
   const [loginMethod, setLoginMethod] = useState('magic')
   const [attention, setAttention] = useState('idle')
+  const [showPassword, setShowPassword] = useState(false)
+  const passwordInputRef = useRef(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [working, setWorking] = useState(false)
@@ -191,6 +204,7 @@ export default function LoginPage() {
   function switchLoginMethod(next) {
     setLoginMethod(next)
     setAttention('idle')
+    setShowPassword(false)
     setMessage('')
     setNotice('')
   }
@@ -198,9 +212,18 @@ export default function LoginPage() {
   function switchMode() {
     setMode(current => current === 'login' ? 'signup' : 'login')
     setAttention('idle')
+    setShowPassword(false)
     setMessage('')
     setNotice('')
     setPassword('')
+  }
+
+  function togglePasswordVisibility() {
+    setShowPassword(visible => !visible)
+    setAttention('password')
+    // Keep the password field active so the mascot's privacy/peek pose
+    // responds to the toggle rather than the button taking focus.
+    passwordInputRef.current?.focus({ preventScroll: true })
   }
 
   async function handleEmail(event) {
@@ -288,7 +311,7 @@ export default function LoginPage() {
               Books, movies, places, and ideas. Samhaal turns the screenshots you save into memories you can find again.
             </p>
 
-            <MemoryCompanion attention={attention} feedback={notice ? 'sent' : message ? 'error' : ''} />
+            <MemoryCompanion attention={attention} passwordVisible={usePassword && showPassword} feedback={notice ? 'sent' : message ? 'error' : ''} />
 
             <div className="portal-visual-trust">
               <span className="portal-trust-icon" aria-hidden="true">✓</span>
@@ -299,7 +322,7 @@ export default function LoginPage() {
 
         <section className="portal-auth-card portal-auth-card-compact" aria-labelledby="login-title">
           <div className="portal-auth-card-inner">
-            <MemoryCompanion attention={attention} feedback={notice ? 'sent' : message ? 'error' : ''} compact />
+            <MemoryCompanion attention={attention} passwordVisible={usePassword && showPassword} feedback={notice ? 'sent' : message ? 'error' : ''} compact />
             <p className="portal-eyebrow">YOUR PRIVATE MEMORY SPACE</p>
             <h1 id="login-title">{creatingAccount ? 'Make memories last.' : 'Welcome back.'}</h1>
             <p className="portal-muted">
@@ -344,19 +367,38 @@ export default function LoginPage() {
               {usePassword && (
                 <>
                   <label htmlFor="samhaal-auth-password">Password</label>
-                  <input
-                    id="samhaal-auth-password"
-                    type="password"
-                    autoComplete={creatingAccount ? 'new-password' : 'current-password'}
-                    minLength={6}
-                    placeholder={creatingAccount ? 'At least 6 characters' : 'Enter your password'}
-                    required
-                    value={password}
-                    disabled={busy}
-                    onFocus={() => setAttention('password')}
-                    onBlur={() => setAttention('idle')}
-                    onChange={e => setPassword(e.target.value)}
-                  />
+                  <div className="portal-password-field">
+                    <input
+                      ref={passwordInputRef}
+                      id="samhaal-auth-password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete={creatingAccount ? 'new-password' : 'current-password'}
+                      minLength={6}
+                      placeholder={creatingAccount ? 'At least 6 characters' : 'Enter your password'}
+                      required
+                      value={password}
+                      disabled={busy}
+                      onFocus={() => setAttention('password')}
+                      onBlur={() => setAttention('idle')}
+                      onChange={e => setPassword(e.target.value)}
+                    />
+                    <button
+                      className="portal-password-toggle"
+                      type="button"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                      onClick={togglePasswordVisibility}
+                      disabled={busy}
+                    >
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        {showPassword
+                          ? <><path d="M3 3l18 18" /><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" /><path d="M9.9 5.1a10.9 10.9 0 0 1 2.1-.2c5.2 0 8.7 4.3 10 7.1a11.4 11.4 0 0 1-3.7 4.6" /><path d="M6.2 6.3A11.8 11.8 0 0 0 2 12c1.3 2.8 4.8 7.1 10 7.1 1.1 0 2.1-.2 3.1-.5" /></>
+                          : <><path d="M2 12s3.7-7.1 10-7.1S22 12 22 12s-3.7 7.1-10 7.1S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>}
+                      </svg>
+                      <span>{showPassword ? 'Hide' : 'Show'}</span>
+                    </button>
+                  </div>
                 </>
               )}
               <button className="portal-button portal-primary portal-auth-submit" type="submit" disabled={busy}>
