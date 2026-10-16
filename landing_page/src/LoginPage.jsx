@@ -9,7 +9,7 @@ import { supabase } from './supabaseClient'
  * Samhaal's playful memory companion. It tracks pointer position, focus and
  * non-sensitive auth status only. It never reads email or password text.
  */
-function NoriryCompanion({ attention, feedback, passwordVisible = false, compact = false }) {
+function MemoryCompanion({ attention, feedback, passwordVisible = false, compact = false }) {
   const sceneRef = useRef(null)
   const clearReactionRef = useRef(null)
   const nextReactionRef = useRef(0)
@@ -30,7 +30,7 @@ function NoriryCompanion({ attention, feedback, passwordVisible = false, compact
     wink: ['Got it. Remembered!', 'One wink, one more good memory.'],
     surprised: ['Whoa, a new discovery!', 'There is always something to remember.'],
     sleepy: ['Even memories need naps…', 'Tap to wake Nori and their buddy!'],
-    proud: ['Noriry found! ✦', 'The little things are worth keeping.'],
+    proud: ['Memory found! ✦', 'The little things are worth keeping.'],
   }
   const [title, subtitle] = reaction && !secret && !peeking
     ? [reaction.title, reaction.subtitle]
@@ -338,7 +338,7 @@ export default function LoginPage() {
               Books, movies, places, and ideas. Samhaal turns the screenshots you save into memories you can find again.
             </p>
 
-            <NoriryCompanion attention={attention} passwordVisible={usePassword && showPassword} feedback={notice ? 'sent' : message ? 'error' : ''} />
+            <MemoryCompanion attention={attention} passwordVisible={usePassword && showPassword} feedback={notice ? 'sent' : message ? 'error' : ''} />
 
             <div className="portal-visual-trust">
               <span className="portal-trust-icon" aria-hidden="true">✓</span>
@@ -349,7 +349,7 @@ export default function LoginPage() {
 
         <section className="portal-auth-card portal-auth-card-compact" aria-labelledby="login-title">
           <div className="portal-auth-card-inner">
-            <NoriryCompanion attention={attention} passwordVisible={usePassword && showPassword} feedback={notice ? 'sent' : message ? 'error' : ''} compact />
+            <MemoryCompanion attention={attention} passwordVisible={usePassword && showPassword} feedback={notice ? 'sent' : message ? 'error' : ''} compact />
             <p className="portal-eyebrow">YOUR PRIVATE MEMORY SPACE</p>
             <h1 id="login-title">{creatingAccount ? 'Make memories last.' : 'Welcome back.'}</h1>
             <p className="portal-muted">
