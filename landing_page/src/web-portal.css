@@ -939,3 +939,78 @@
   .portal-auth-shell { height: auto; min-height: 100dvh; overflow-y: auto; }
   .portal-auth-stage { min-height: 0; padding-top: 14px; padding-bottom: 20px; }
 }
+
+
+/* Password visibility interaction and Memo's mischievous peek. */
+.portal-auth-shell .portal-password-field {
+  position: relative;
+  width: 100%;
+}
+.portal-auth-shell .portal-password-field input {
+  display: block;
+  width: 100%;
+  padding-right: 100px;
+}
+.portal-auth-shell .portal-password-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 66px;
+  min-height: 32px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #52525b;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.portal-auth-shell .portal-password-toggle:hover:not(:disabled),
+.portal-auth-shell .portal-password-toggle[aria-pressed="true"] {
+  color: #09090b;
+  background: #f4f4f5;
+}
+.portal-auth-shell .portal-password-toggle:focus-visible {
+  outline: 2px solid #52525b;
+  outline-offset: 1px;
+}
+.portal-auth-shell .portal-password-toggle:disabled { cursor: not-allowed; opacity: .5; }
+.portal-companion-peek-eye, .portal-companion-peek-smile { opacity: 0; transition: opacity .18s ease; }
+.portal-companion-scene.is-peek .portal-companion-peek-eye,
+.portal-companion-scene.is-peek .portal-companion-peek-smile { opacity: 1; }
+.portal-companion-scene.is-peek .portal-companion-right-eye { opacity: 0; }
+.portal-companion-scene.is-peek .portal-companion-smile { opacity: 0; }
+.portal-companion-scene.is-peek .portal-companion-eyes { animation: none; }
+.portal-companion-scene.is-peek .portal-companion-pupils {
+  transform: translate(11px, -3px);
+}
+.portal-companion-scene.is-peek .portal-companion-leaf {
+  transform: rotate(13deg) translate(8px, -4px);
+}
+.portal-companion-scene.is-peek .portal-companion-eyebrows { opacity: 1; }
+.portal-companion-scene.is-peek .portal-companion-hands {
+  opacity: 1;
+  transform: translateY(11px) translateX(-4px) rotate(-6deg) scale(.93);
+}
+.portal-companion-scene.is-peek .portal-companion-sprite {
+  animation: portal-companion-sneak .65s ease-out 1;
+}
+.portal-companion-scene.is-peek .portal-companion-mood {
+  transform: translate(-5px, -9px) rotate(12deg);
+}
+@keyframes portal-companion-sneak {
+  0% { transform: translateX(-7px) rotate(-8deg); }
+  45% { transform: translateX(10px) rotate(9deg); }
+  70% { transform: translateX(4px) rotate(4deg); }
+  100% { transform: translateX(0) rotate(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal-companion-scene.is-peek .portal-companion-sprite { animation: none; }
+}
