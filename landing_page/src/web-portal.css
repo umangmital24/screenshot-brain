@@ -127,3 +127,7 @@
 .portal-google-slot { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: center; margin-bottom: 18px; }
 .portal-google-slot > div { max-width: 100%; }
 .portal-google-loading { color: #777; font-size: 12px; margin: 0 0 12px; text-align: center; }
+
+/* Passwordless fallback while browser Google OAuth is not authorized. */
+.portal-email-hint { margin: 0; font-size: 11px; color: #707070; line-height: 1.6; }
+.portal-auth-card .portal-email-hint { margin: 0 0 6px; }
