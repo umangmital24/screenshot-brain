@@ -5,34 +5,41 @@ export default function AuthCallbackPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    let mounted = true
+    let active = true
+
     async function finishSignIn() {
-      if (!supabase) {
-        setError('Web login has not been configured.')
+      // Supabase parses implicit-flow tokens from the URL automatically,
+      // then persists the session before getSession() resolves.
+      const search = new URLSearchParams(window.location.search)
+      const hash = new URLSearchParams(window.location.hash.slice(1))
+      const authError = search.get('error_description') || hash.get('error_description')
+        || search.get('error') || hash.get('error')
+
+      if (authError) {
+        if (active) setError(authError)
         return
       }
-      const params = new URLSearchParams(window.location.search)
-      const providerError = params.get('error_description') || params.get('error')
-      if (providerError) {
-        setError(providerError)
-        return
-      }
-      const code = params.get('code')
+
       try {
+        // Backwards-compatible with any pending links created under the
+        // previous PKCE configuration (when the browser has the verifier).
+        const code = search.get('code')
         if (code) {
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
           if (exchangeError) throw exchangeError
         }
         const { data, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) throw sessionError
-        if (!data.session) throw new Error('No active session. Please sign in again.')
-        window.location.replace('/dashboard')
+        if (!data.session) {
+          throw new Error('No login session was found. Request a new email link and open it in the same browser.')
+        }
+        if (active) window.location.replace('/dashboard')
       } catch (err) {
-        if (mounted) setError(err?.message || 'Could not finish sign-in.')
+        if (active) setError(err?.message || 'Could not finish sign-in.')
       }
     }
     finishSignIn()
-    return () => { mounted = false }
+    return () => { active = false }
   }, [])
 
   return (
