@@ -1,6 +1,6 @@
 # Samhaal Landing Page
 
-Landing page for **Samhaal (संभाल)** with waitlist capture, Vercel Analytics, and SEO metadata.
+Landing page for **Samhaal (संभाल)** with Supabase login, Android download navigation, Vercel Analytics, and SEO metadata.
 
 ## Run locally
 
@@ -26,9 +26,7 @@ Never put a Supabase service-role key in the frontend.
 ## Included
 
 - Existing Samhaal landing page UI
-- Waitlist POST integration
 - Vercel Analytics page-view tracking
-- `waitlist_signup` conversion event
 - SEO title and meta description
 - Canonical URL
 - Open Graph metadata
@@ -91,7 +89,7 @@ The home page includes a sticky, seven-chapter interactive story driven by `src/
 
 The seven original phone screenshots are now included at `public/story/01.webp` through `public/story/07.webp`. The CSS imitation phone and its overlapping cards have been removed. The story uses a minimal brand placeholder only if a file fails to load.
 
-The primary navigation now links to `#story`. Existing FAQ, waitlist, and metadata are preserved. A GitHub Actions workflow (`.github/workflows/samhaal-website-build.yml`) checks Vite builds on changes to this branch.
+The primary navigation now links to `#story`. The former early-access / waitlist sections and signup form have been removed in favor of direct Login and Get App actions. A GitHub Actions workflow (`.github/workflows/samhaal-website-build.yml`) checks Vite builds on changes to this branch.
 
 ## Samhaal Web dashboard UI (v2)
 
@@ -128,9 +126,9 @@ The web Supabase client falls back to the **same public Supabase URL and publish
 In Supabase Auth settings, allow `https://YOUR-WEB-DOMAIN/auth/callback` as an OAuth/email redirect URL, and configure the Google provider appropriately. Configure FastAPI `ALLOWED_ORIGINS` to include the exact web origin (and your local Vite dev origin). The web app sends Supabase access tokens in Authorization Bearer headers to the existing protected API routes.
 
 
-Note: the public `/waitlist` form uses the FastAPI `/waitlist` endpoint and its server-side Supabase connection, so working waitlist submissions do **not** mean browser Supabase Auth is configured. Email magic links require the site's `/auth/callback` URL to be allowlisted in Supabase Auth.
+Email magic links require the site's `/auth/callback` URL to be allowlisted in Supabase Auth. The public website no longer presents or submits any waitlist form; the old `/waitlist` backend endpoint is unchanged for compatibility.
 
-The existing waitlist and marketing story remain unchanged. The `prebuild` reconstructs `LandingPage.jsx` from `src/fragments/LandingPage.part*.txt`: **edit the fragment**, not the generated JSX, for future landing-page navigation changes.
+The existing product story and FAQ remain available. The `prebuild` reconstructs `LandingPage.jsx` from `src/fragments/LandingPage.part*.txt`: **edit the fragment**, not the generated JSX, for future landing-page navigation changes.
 
 ### Browser sign-in while Google Console access is unavailable
 
