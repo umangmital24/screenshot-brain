@@ -20,8 +20,10 @@ const supabaseAnonKey = configuredKey && !/xxxxx|YOUR_|your_/i.test(configuredKe
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    flowType: 'pkce',
-    detectSessionInUrl: false,
+    // Default Supabase email Magic Link templates use the browser implicit flow.
+    // Let Supabase automatically consume session tokens on /auth/callback.
+    flowType: 'implicit',
+    detectSessionInUrl: true,
     persistSession: true,
     autoRefreshToken: true,
   },
