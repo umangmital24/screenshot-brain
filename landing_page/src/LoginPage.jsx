@@ -9,35 +9,35 @@ import { supabase } from './supabaseClient'
  * Samhaal's playful memory companion. It tracks pointer position, focus and
  * non-sensitive auth status only. It never reads email or password text.
  */
-function MemoryCompanion({ attention, feedback, passwordVisible = false, compact = false }) {
+function NoriryCompanion({ attention, feedback, passwordVisible = false, compact = false }) {
   const sceneRef = useRef(null)
   const clearReactionRef = useRef(null)
   const nextReactionRef = useRef(0)
   const [reaction, setReaction] = useState(null)
 
-  // Peeking is opt-in: Memo only peeks when the user has explicitly
-  // revealed the password. Password content is never passed to Memo.
+  // Peeking is opt-in: Nori only peeks when the user has explicitly
+  // revealed the password. Password content is never passed to Nori.
   const peeking = passwordVisible
   const secret = attention === 'password' && !peeking
   const reading = attention === 'email' && !peeking
   const mood = peeking ? 'peek' : secret ? 'secret' : reaction?.mood || (feedback === 'sent' ? 'happy' : feedback === 'error' ? 'surprised' : reading ? 'curious' : 'idle')
   const prompts = {
-    idle: ['Meet Memo, your memory buddy!', 'Tap Memo or a floating memory to play.'],
+    idle: ['Meet Nori, your memory buddy!', 'Tap Nori or a floating memory to play.'],
     curious: ['Ooh, hello there!', 'I love meeting familiar memories.'],
     secret: ['No peeking. Promise!', 'Your password is for your eyes only.'],
-    peek: ['Just one tiny peek… 👀', 'Oops! You caught Memo looking.'],
-    happy: ['A little happiness, saved! ✦', 'Memo is doing a happy dance.'],
+    peek: ['Just one tiny peek… 👀', 'Oops! You caught Nori looking.'],
+    happy: ['A little happiness, saved! ✦', 'Nori is doing a happy dance.'],
     wink: ['Got it. Remembered!', 'One wink, one more good memory.'],
     surprised: ['Whoa, a new discovery!', 'There is always something to remember.'],
-    sleepy: ['Even memories need naps…', 'Tap again to wake Memo up.'],
-    proud: ['Memory found! ✦', 'The little things are worth keeping.'],
+    sleepy: ['Even memories need naps…', 'Tap to wake Nori and their buddy!'],
+    proud: ['Noriry found! ✦', 'The little things are worth keeping.'],
   }
   const [title, subtitle] = reaction && !secret && !peeking
     ? [reaction.title, reaction.subtitle]
     : feedback === 'sent' && !secret && !peeking
-      ? ['Check your inbox! ✦', 'Memo is cheering you on.']
+      ? ['Check your inbox! ✦', 'Nori is cheering you on.']
       : feedback === 'error' && !secret && !peeking
-        ? ['Oops, try once more?', "Memo's still rooting for you."]
+        ? ['Oops, try once more?', "Nori's still rooting for you."]
         : prompts[mood]
 
   useEffect(() => {
@@ -60,10 +60,10 @@ function MemoryCompanion({ attention, feedback, passwordVisible = false, compact
   function play(kind) {
     window.clearTimeout(clearReactionRef.current)
     const cycle = [
-      { mood: 'happy', title: 'You made Memo smile! ✦', subtitle: 'Tap again — Memo has more moods.' },
+      { mood: 'happy', title: 'You made Nori smile! ✦', subtitle: 'Tap again — Nori has more moods.' },
       { mood: 'wink', title: 'Psst… memory saved!', subtitle: "That's our little secret." },
       { mood: 'surprised', title: 'Oh! You found me!', subtitle: 'An unexpected memory moment.' },
-      { mood: 'sleepy', title: 'Zzz… just resting my leaves.', subtitle: 'Tap to wake Memo up.' },
+      { mood: 'sleepy', title: 'Zzz… just resting my thoughts.', subtitle: 'Tap to wake Nori up.' },
     ]
     const next = kind === 'movie'
       ? { mood: 'surprised', title: 'Movie night unlocked! ▶', subtitle: 'Find your Watch Later list in Samhaal.' }
@@ -110,57 +110,84 @@ function MemoryCompanion({ attention, feedback, passwordVisible = false, compact
         type="button"
         className="portal-companion-sprite"
         onClick={() => play()}
-        title="Tap Memo to discover a new expression"
-        aria-label="Play with Memo, the Samhaal memory companion"
+        title="Tap Nori to discover a new expression"
+        aria-label="Play with Nori, the Samhaal memory companion"
       >
-        <svg className="portal-companion-svg" viewBox="0 0 300 255" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <ellipse cx="151" cy="239" rx="69" ry="10" fill="#08080a" opacity=".18" />
-          <g className="portal-companion-leaf">
-            <path d="M146 42C169 15 208 14 225 21C220 40 201 61 176 69" fill="#dbdce3" stroke="#e9eaf0" strokeWidth="3" strokeLinejoin="round" />
-            <path d="M152 44C207 46 241 80 237 143C233 200 190 228 145 224C95 219 66 182 66 137C66 83 101 46 152 44Z" fill="#f9fafb" stroke="#d9dae1" strokeWidth="3" />
-            <path d="M151 45C151 82 146 113 128 143" stroke="#d5d7de" strokeWidth="2" strokeLinecap="round" opacity=".55" />
-            <ellipse cx="95" cy="157" rx="13" ry="7" fill="#f5b0b8" opacity=".32" />
-            <ellipse cx="204" cy="157" rx="13" ry="7" fill="#f5b0b8" opacity=".32" />
+        <svg className="portal-companion-svg" viewBox="0 0 320 270" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          {/* Nori is a little memory orb with a curious floating companion. */}
+          <ellipse cx="150" cy="249" rx="81" ry="12" fill="#08080a" opacity=".18" />
+          <path d="M66 27C116 4 184 -4 237 19C273 35 301 66 310 108" stroke="#fff" strokeOpacity=".12" strokeWidth="2" strokeLinecap="round" />
+          <path d="M96 17C92 53 99 101 121 141" stroke="#fff" strokeOpacity=".09" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="73" cy="53" r="3" fill="#e6e7f0" opacity=".6" />
+          <path d="M274 122v13m-6.5-6.5h13" stroke="#ececf6" strokeOpacity=".5" strokeWidth="2.5" strokeLinecap="round" />
+
+          <g className="portal-companion-sidekick">
+            <path d="M214 40C232 24 258 22 275 35C291 48 292 72 278 87C264 102 238 104 220 92C203 80 198 56 214 40Z"
+              fill="#f6f7fb" stroke="#d7dbe7" strokeWidth="3" />
+            <ellipse cx="244" cy="63" rx="20" ry="16" fill="#e9eaf8" />
+            <g className="portal-companion-sidekick-eye">
+              <ellipse cx="237" cy="63" rx="5.2" ry="7" fill="#69609c" />
+              <ellipse cx="251" cy="63" rx="5.2" ry="7" fill="#69609c" />
+              <circle cx="239" cy="61" r="1.7" fill="#fff" />
+              <circle cx="253" cy="61" r="1.7" fill="#fff" />
+            </g>
+            <path d="M241 78Q245 81 249 78" stroke="#8281ac" strokeWidth="1.8" strokeLinecap="round" />
+            <circle cx="226" cy="76" r="4" fill="#f7b8c7" opacity=".45" />
+            <circle cx="264" cy="76" r="4" fill="#f7b8c7" opacity=".45" />
+          </g>
+
+          <g className="portal-companion-leaf portal-companion-orb">
+            <circle cx="141" cy="135" r="85" fill="#f9fafc" stroke="#dfe2ed" strokeWidth="3" />
+            <path d="M102 59C137 42 180 48 202 69" stroke="#d9dce9" strokeWidth="2.5" strokeLinecap="round" opacity=".8" />
+            <path d="M139 52C146 83 144 125 133 166" stroke="#d8dce8" strokeWidth="1.8" strokeLinecap="round" opacity=".45" />
+            <path d="M84 88C72 111 70 150 82 173" stroke="#fff" strokeWidth="8" strokeLinecap="round" opacity=".5" />
+            <ellipse cx="91" cy="158" rx="15" ry="8" fill="#f5b4c3" opacity=".43" />
+            <ellipse cx="192" cy="158" rx="15" ry="8" fill="#f5b4c3" opacity=".43" />
+
+            <g className="portal-companion-eyebrows">
+              <path d="M91 107Q103 100 115 105" stroke="#9496a8" strokeWidth="3" strokeLinecap="round" />
+              <path d="M168 105Q182 98 195 107" stroke="#9496a8" strokeWidth="3" strokeLinecap="round" />
+            </g>
             <g className="portal-companion-eyes">
               <g className="portal-companion-left-eye">
-                <ellipse cx="119" cy="139" rx="17" ry="19" fill="#e2e4e9" opacity=".65" />
+                <ellipse cx="105" cy="128" rx="16" ry="19" fill="#fff" />
                 <g className="portal-companion-pupils">
-                  <ellipse cx="119" cy="140" rx="8.5" ry="11" fill="#17171c" />
-                  <circle cx="122" cy="135" r="2.7" fill="#fff" opacity=".9" />
+                  <ellipse cx="105" cy="130" rx="8.4" ry="10.6" fill="#202029" />
+                  <circle cx="108" cy="125" r="2.7" fill="#fff" />
                 </g>
               </g>
               <g className="portal-companion-right-eye">
-                <ellipse cx="180" cy="139" rx="17" ry="19" fill="#e2e4e9" opacity=".65" />
+                <ellipse cx="181" cy="128" rx="16" ry="19" fill="#fff" />
                 <g className="portal-companion-pupils">
-                  <ellipse cx="180" cy="140" rx="8.5" ry="11" fill="#17171c" />
-                  <circle cx="183" cy="135" r="2.7" fill="#fff" opacity=".9" />
+                  <ellipse cx="181" cy="130" rx="8.4" ry="10.6" fill="#202029" />
+                  <circle cx="184" cy="125" r="2.7" fill="#fff" />
                 </g>
               </g>
             </g>
             <g className="portal-companion-shy-eyes">
-              <path d="M107 143Q119 151 131 141" stroke="#2a2a32" strokeWidth="4" strokeLinecap="round" />
-              <path d="M168 141Q181 152 192 141" stroke="#2a2a32" strokeWidth="4" strokeLinecap="round" />
+              <path d="M92 132Q105 140 119 131" stroke="#313139" strokeWidth="4.2" strokeLinecap="round" />
+              <path d="M168 131Q181 140 194 131" stroke="#313139" strokeWidth="4.2" strokeLinecap="round" />
             </g>
-            <path className="portal-companion-wink-eye" d="M166 141Q180 151 193 141" stroke="#24242a" strokeWidth="4.5" strokeLinecap="round" />
+            <path className="portal-companion-wink-eye" d="M168 131Q181 140 194 131" stroke="#313139" strokeWidth="4.2" strokeLinecap="round" />
             <g className="portal-companion-peek-eye">
-              <path d="M169 137Q181 125 194 137" stroke="#303038" strokeWidth="3.5" strokeLinecap="round" />
-              <ellipse cx="181" cy="140" rx="6" ry="7" fill="#292930" />
-              <circle cx="183" cy="137" r="2" fill="#fff" />
-              <path d="M168 144Q180 153 194 144" stroke="#41414a" strokeWidth="2.6" strokeLinecap="round" />
+              <path d="M169 124Q181 113 194 124" stroke="#313139" strokeWidth="3.5" strokeLinecap="round" />
+              <ellipse cx="181" cy="128" rx="6.2" ry="7" fill="#2d2d36" />
+              <circle cx="183" cy="125" r="2" fill="#fff" />
+              <path d="M168 132Q181 141 194 132" stroke="#41414a" strokeWidth="2.6" strokeLinecap="round" />
             </g>
-            <g className="portal-companion-eyebrows">
-              <path d="M107 111Q119 104 131 109" stroke="#777987" strokeWidth="3" strokeLinecap="round" />
-              <path d="M169 109Q182 103 194 112" stroke="#777987" strokeWidth="3" strokeLinecap="round" />
-            </g>
-            <path className="portal-companion-smile" d="M141 169Q150 177 161 169" stroke="#27272a" strokeWidth="3.7" strokeLinecap="round" />
-            <path className="portal-companion-happy-smile" d="M132 166Q150 193 169 166Q152 174 132 166Z" fill="#42424b" stroke="#27272a" strokeWidth="2.5" strokeLinejoin="round" />
-            <ellipse className="portal-companion-surprise-mouth" cx="150" cy="174" rx="8.5" ry="12" fill="#34343b" />
-            <path className="portal-companion-secret-smile" d="M144 174Q150 171 156 174" stroke="#27272a" strokeWidth="3.7" strokeLinecap="round" />
-            <path className="portal-companion-peek-smile" d="M138 169Q152 184 166 165" stroke="#27272a" strokeWidth="3.8" strokeLinecap="round" />
+            <path className="portal-companion-smile" d="M130 174Q143 184 157 174" stroke="#303039" strokeWidth="3.8" strokeLinecap="round" />
+            <path className="portal-companion-secret-smile" d="M136 177Q143 174 150 177" stroke="#303039" strokeWidth="3.8" strokeLinecap="round" />
+            <path className="portal-companion-peek-smile" d="M128 172Q143 188 161 169" stroke="#303039" strokeWidth="3.8" strokeLinecap="round" />
+            <path className="portal-companion-happy-smile" d="M120 171Q143 199 166 171Q144 180 120 171Z"
+              fill="#484858" stroke="#303039" strokeWidth="2.5" strokeLinejoin="round" />
+            <ellipse className="portal-companion-surprise-mouth" cx="143" cy="177" rx="9" ry="12" fill="#373741" />
           </g>
+
           <g className="portal-companion-hands">
-            <path d="M67 187C80 169 104 151 120 144C127 141 130 147 125 152C118 159 111 165 105 171L133 153C141 148 146 154 139 161L107 189C90 203 74 206 67 187Z" fill="#d9dce4" stroke="#adb0bc" strokeWidth="2.5" />
-            <path d="M231 187C219 168 195 151 181 144C172 140 169 148 175 153L193 171L165 153C157 148 152 154 159 161L192 190C208 204 226 208 231 187Z" fill="#d9dce4" stroke="#adb0bc" strokeWidth="2.5" />
+            <path d="M74 191C89 172 110 157 125 151C133 147 137 153 132 159L117 174L139 159C148 154 152 159 147 166L121 192C106 206 88 208 74 191Z"
+              fill="#dce0eb" stroke="#aeb4c3" strokeWidth="2.5" />
+            <path d="M211 191C198 172 178 157 162 151C155 147 150 153 155 159L171 174L148 159C140 154 135 160 141 166L168 192C182 206 200 208 211 191Z"
+              fill="#dce0eb" stroke="#aeb4c3" strokeWidth="2.5" />
           </g>
         </svg>
         <span className="portal-companion-mood" aria-hidden="true">
@@ -311,7 +338,7 @@ export default function LoginPage() {
               Books, movies, places, and ideas. Samhaal turns the screenshots you save into memories you can find again.
             </p>
 
-            <MemoryCompanion attention={attention} passwordVisible={usePassword && showPassword} feedback={notice ? 'sent' : message ? 'error' : ''} />
+            <NoriryCompanion attention={attention} passwordVisible={usePassword && showPassword} feedback={notice ? 'sent' : message ? 'error' : ''} />
 
             <div className="portal-visual-trust">
               <span className="portal-trust-icon" aria-hidden="true">✓</span>
@@ -322,7 +349,7 @@ export default function LoginPage() {
 
         <section className="portal-auth-card portal-auth-card-compact" aria-labelledby="login-title">
           <div className="portal-auth-card-inner">
-            <MemoryCompanion attention={attention} passwordVisible={usePassword && showPassword} feedback={notice ? 'sent' : message ? 'error' : ''} compact />
+            <NoriryCompanion attention={attention} passwordVisible={usePassword && showPassword} feedback={notice ? 'sent' : message ? 'error' : ''} compact />
             <p className="portal-eyebrow">YOUR PRIVATE MEMORY SPACE</p>
             <h1 id="login-title">{creatingAccount ? 'Make memories last.' : 'Welcome back.'}</h1>
             <p className="portal-muted">
