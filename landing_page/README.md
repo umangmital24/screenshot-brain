@@ -96,8 +96,8 @@ The primary navigation now links to `#story`. Existing FAQ, waitlist, and metada
 ## Samhaal Web login and Android download
 
 - The landing-page header and mobile menu now link to `/login` and `/get-app`.
-- `/login` uses the **same Supabase Auth project** as Android: Google OAuth and email/password.
-- `/auth/callback` exchanges the PKCE OAuth code for a web session.
+- `/login` uses the **same Supabase Auth project** as Android: existing-account email magic links and email/password. Browser Google login is temporarily disabled.
+- `/auth/callback` completes email magic-link sessions, with legacy PKCE callback compatibility.
 - After sign-in, `/dashboard` lists saved memory metadata and supports text search, intent/status filters, completion updates and Ask Samhaal through the existing FastAPI backend.
 - Screenshots are **not uploaded, backed up, or rendered** in the web experience.
 - `/get-app` displays an Android download coming-soon message until the APK URL is configured with `VITE_ANDROID_APK_URL`. Set it to a hosted HTTPS APK or a same-site `/downloads/...` asset, then redeploy.
@@ -109,27 +109,33 @@ The web Supabase client falls back to the **same public Supabase URL and publish
 In Supabase Auth settings, allow `https://YOUR-WEB-DOMAIN/auth/callback` as an OAuth/email redirect URL, and configure the Google provider appropriately. Configure FastAPI `ALLOWED_ORIGINS` to include the exact web origin (and your local Vite dev origin). The web app sends Supabase access tokens in Authorization Bearer headers to the existing protected API routes.
 
 
-Note: the public `/waitlist` form uses the FastAPI `/waitlist` endpoint and its server-side Supabase connection, so working waitlist submissions do **not** mean browser Supabase Auth is configured. Google login on web additionally requires the site's `/auth/callback` URL to be allowlisted in Supabase Auth.
+Note: the public `/waitlist` form uses the FastAPI `/waitlist` endpoint and its server-side Supabase connection, so working waitlist submissions do **not** mean browser Supabase Auth is configured. Email magic links require the site's `/auth/callback` URL to be allowlisted in Supabase Auth.
 
 The existing waitlist and marketing story remain unchanged. The `prebuild` reconstructs `LandingPage.jsx` from `src/fragments/LandingPage.part*.txt`: **edit the fragment**, not the generated JSX, for future landing-page navigation changes.
 
-### Google sign-in without the OAuth Client Secret exchange
+### Browser sign-in while Google Console access is unavailable
 
-The web login uses Google Identity Services (GIS) to obtain a Google **ID token**,
-then `supabase.auth.signInWithIdToken({ provider: 'google', token })`, matching
-the existing Android sign-in path. It reuses the **public Web Client ID** from
-`android_app/src/screens/LoginScreen.js` on `main`.
-`VITE_GOOGLE_WEB_CLIENT_ID` is an optional override for future rotations.
-Do not put any Google Client Secret in frontend code or Vercel public variables.
+The Android app continues to use Google ID-token sign-in. Web Google sign-in
+is temporarily hidden because Google's Web Client ID does not authorize
+`https://samhaal.vercel.app` as a JavaScript origin, and Supabase's server-side
+Google Client Secret is invalid. Reusing an Android ID does not remove the
+browser-origin restriction. **Do not expose a Google client secret in Vercel.**
 
-In Google Cloud Console > Google Auth Platform > Clients > the **Web**
-OAuth Client matching Android's `GOOGLE_WEB_CLIENT_ID`, add
-`https://samhaal.vercel.app` to **Authorized JavaScript origins**.
-This browser-origin requirement is independent of the Android client.
-The Supabase Google provider must include that Web Client ID among
-its allowed Client IDs. The existing mobile Google sign-in being functional
-does not prove the browser origin is registered.
+For now, web offers `supabase.auth.signInWithOtp()` email magic links with
+`shouldCreateUser: false`, plus the existing email/password option.
+Existing Android Google users should enter the **same Google account email**.
+Magic link sessions are handled through the browser implicit flow at
+`/auth/callback`. No new Supabase user is intentionally created by this
+existing-user magic link flow. Users should open the email link in the same
+browser they initiated sign-in from.
 
-This ID-token approach avoids the failing Google authorization-code exchange
-(the invalid Client Secret error in Supabase Auth logs). Email/password
-authentication and callback handling for email confirmation are unchanged.
+Email login requires Supabase Auth email sending to work, and may need
+SMTP configuration or sufficient email delivery quota. The Supabase
+authentication redirect allowlist must include
+`https://samhaal.vercel.app/auth/callback`. Verify the logged-in
+Supabase user ID matches the Android user ID before concluding
+cross-device memory sync works. No image backups are part of the flow.
+
+Web Google login can be restored only once someone with Google Cloud Console
+access authorizes the website JavaScript origin and validates the matching
+Google OAuth credentials.
