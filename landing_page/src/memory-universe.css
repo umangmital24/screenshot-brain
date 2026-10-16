@@ -1,0 +1,375 @@
+/* Samhaal Memory Universe — login-only illustration, no real memory data. */
+.memory-universe {
+  --universe-x: 0px;
+  --universe-y: 0px;
+  position: relative;
+  isolation: isolate;
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 222px;
+  max-height: 350px;
+  margin: 13px auto 6px;
+  color: #f4f4f5;
+}
+.memory-universe-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: visible;
+}
+.memory-universe-speckles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255,255,255,.28) .8px, transparent .8px);
+  background-size: 24px 24px;
+  opacity: .18;
+  mask-image: radial-gradient(ellipse, black, transparent 74%);
+}
+.memory-universe-orbit {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  z-index: 0;
+  border: 1px solid rgba(226,227,234,.13);
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(calc(-50% + var(--universe-x)),calc(-50% + var(--universe-y))) rotate(-15deg);
+  transition: transform .25s ease, border-color .45s ease, opacity .45s ease;
+}
+.memory-universe-orbit--one { width: min(54%,252px); aspect-ratio: 1; }
+.memory-universe-orbit--two { width: min(82%,360px); aspect-ratio: 1; opacity: .85; border-style: dashed; }
+.memory-universe-orbit--three { width: min(112%,460px); aspect-ratio: 1; opacity: .55; }
+.memory-universe-radial {
+  position: absolute;
+  inset: 2% 14%;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(233,234,248,.17) 0%, rgba(233,234,248,.055) 31%, transparent 68%);
+  transition: opacity .4s, transform .4s;
+}
+.memory-universe-core {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  z-index: 4;
+  transform: translate(calc(-50% + var(--universe-x)),calc(-50% + var(--universe-y)));
+  transition: transform .25s ease, filter .4s ease;
+}
+.memory-universe-core-glow {
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 38px;
+  width: 175px;
+  height: 175px;
+  transform: translate(-50%,-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle,rgba(230,230,244,.25),transparent 70%);
+  filter: blur(12px);
+  animation: mu-breathe 4.3s ease-in-out infinite;
+}
+.memory-universe-core-shell {
+  width: 91px;
+  height: 91px;
+  display: grid;
+  place-items: center;
+  background: rgba(255,255,255,.94);
+  border: 1px solid rgba(255,255,255,.62);
+  border-radius: 26px;
+  box-shadow: 0 14px 42px rgba(0,0,0,.27),inset 0 2px 4px rgba(255,255,255,.75);
+  position: relative;
+}
+.memory-universe-core-shell img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: 13px;
+}
+.memory-universe-core-name {
+  font-size: 11px;
+  font-weight: 790;
+  letter-spacing: .35px;
+  color: #eeeef4;
+}
+.memory-universe-slot {
+  position: absolute;
+  z-index: 3;
+  opacity: 1;
+  transition: opacity .4s ease, transform .55s cubic-bezier(.22,.76,.2,1);
+}
+.memory-universe-slot--watch { left: 1%; top: 15%; --collapse-x: 115px; --collapse-y: 57px; }
+.memory-universe-slot--read { right: 0; top: 14%; --collapse-x: -113px; --collapse-y: 55px; }
+.memory-universe-slot--visit { right: 0; bottom: 8%; --collapse-x: -113px; --collapse-y: -66px; }
+.memory-universe-slot--buy { left: 0; bottom: 10%; --collapse-x: 115px; --collapse-y: -58px; }
+.memory-universe-slot--idea { top: -2%; left: 50%; --collapse-x: 0px; --collapse-y: 90px; transform: translateX(-50%); }
+.memory-universe-chip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  min-height: 38px;
+  white-space: nowrap;
+  background: rgba(255,255,255,.085);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 100px;
+  color: #ededf3;
+  box-shadow: 0 10px 24px rgba(0,0,0,.16);
+  backdrop-filter: blur(12px);
+  font: 650 11px/1.3 inherit;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  animation: mu-float 5.8s ease-in-out infinite;
+  transition: background .22s,border-color .22s,box-shadow .22s;
+}
+.memory-universe-slot--read .memory-universe-chip { animation-delay: -1s; }
+.memory-universe-slot--visit .memory-universe-chip { animation-delay: -2.6s; }
+.memory-universe-slot--buy .memory-universe-chip { animation-delay: -1.8s; }
+.memory-universe-slot--idea .memory-universe-chip { animation-delay: -3.2s; }
+.memory-universe-chip:hover,
+.memory-universe-chip--selected {
+  border-color: rgba(255,255,255,.66);
+  background: rgba(255,255,255,.2);
+  box-shadow: 0 12px 30px rgba(0,0,0,.23),0 0 0 2px rgba(255,255,255,.05);
+}
+.memory-universe-chip:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+}
+.memory-universe-chip:disabled { cursor: default; }
+.memory-universe-chip-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  display: grid;
+  place-items: center;
+  background: rgba(255,255,255,.15);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 11px;
+}
+.memory-universe-vault {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 143px;
+  height: 143px;
+  border: 1px dashed rgba(255,255,255,.68);
+  border-radius: 50%;
+  z-index: 5;
+  opacity: 0;
+  transform: translate(-50%,-50%) scale(.7);
+  transition: opacity .3s,transform .4s cubic-bezier(.2,.8,.2,1);
+  pointer-events: none;
+}
+.memory-universe-vault::before {
+  content:"";
+  position:absolute;
+  inset: -11px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.14);
+}
+.memory-universe-vault svg {
+  position: absolute;
+  width: 31px;
+  height: 31px;
+  bottom: -11px;
+  left: calc(50% - 15px);
+  background: #27272f;
+  color: #fff;
+  border: 1px solid #73737c;
+  border-radius: 50%;
+  padding: 7px;
+  box-sizing: border-box;
+  box-shadow: 0 6px 18px rgba(0,0,0,.3);
+}
+.memory-universe-peek {
+  position: absolute;
+  z-index: 6;
+  left: calc(50% + 47px);
+  top: calc(46% + 43px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  background: #3c3c45;
+  border: 1px solid #797983;
+  font-size: 10px;
+  font-weight: 680;
+  padding: 7px 10px;
+  border-radius: 9px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-9px,10px) rotate(6deg);
+  transition: opacity .3s,transform .4s;
+}
+.memory-universe-success {
+  position: absolute;
+  z-index: 6;
+  top: calc(46% - 47px);
+  left: calc(50% + 33px);
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  background: #ecfdf5;
+  color: #047857;
+  border: 2px solid #27272a;
+  border-radius: 50%;
+  font-weight: 900;
+  font-size: 14px;
+  opacity: 0;
+  transform: scale(.3);
+  transition: opacity .35s,transform .35s;
+}
+.memory-universe-caption {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 5px;
+  min-height: 58px;
+  text-align: center;
+  padding: 0 8px;
+  position: relative;
+  z-index: 8;
+}
+.memory-universe-caption strong {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 790;
+  line-height: 1.3;
+}
+.memory-universe-caption span { color:#bdbdc8;font-size:10.5px;line-height:1.5; }
+.memory-universe-caption small { color:#8f909d;font-size:9px;line-height:1.5; }
+
+/* Focus states: spotlight for email; collapse to the private vault for password. */
+.memory-universe--active .memory-universe-chip {
+  border-color: rgba(255,255,255,.37);
+  background: rgba(255,255,255,.145);
+}
+.memory-universe--active .memory-universe-radial { transform: scale(1.09); }
+.memory-universe--private .memory-universe-slot,
+.memory-universe--peek .memory-universe-slot {
+  opacity: .07;
+  transform: translate(var(--collapse-x),var(--collapse-y)) scale(.25);
+  pointer-events: none;
+}
+.memory-universe--private .memory-universe-slot--idea,
+.memory-universe--peek .memory-universe-slot--idea {
+  transform: translateX(-50%) translate(var(--collapse-x),var(--collapse-y)) scale(.25);
+}
+.memory-universe--private .memory-universe-vault,
+.memory-universe--peek .memory-universe-vault {
+  opacity: 1;
+  transform: translate(-50%,-50%) scale(1);
+}
+.memory-universe--private .memory-universe-radial,
+.memory-universe--peek .memory-universe-radial { opacity:.4; }
+.memory-universe--peek .memory-universe-peek {
+  opacity: 1;
+  transform: translate(0,0) rotate(-3deg);
+}
+.memory-universe--sent .memory-universe-core-glow { animation: mu-success-glow 1.7s ease-in-out infinite; }
+.memory-universe--sent .memory-universe-success { opacity:1;transform:scale(1); }
+.memory-universe--sent .memory-universe-chip {
+  background: rgba(255,255,255,.16);
+  border-color: rgba(255,255,255,.37);
+}
+.memory-universe--sent .memory-universe-slot--watch { transform:translate(-8px,-5px); }
+.memory-universe--sent .memory-universe-slot--read { transform:translate(8px,-6px); }
+.memory-universe--sent .memory-universe-slot--visit { transform:translate(7px,7px); }
+.memory-universe--sent .memory-universe-slot--buy { transform:translate(-7px,8px); }
+.memory-universe--sent .memory-universe-slot--idea { transform:translateX(-50%) translateY(-9px); }
+.memory-universe--error .memory-universe-slot { opacity: .6; }
+
+@keyframes mu-float {
+  0%,100% { transform: translateY(0); }
+  50% { transform:translateY(-6px); }
+}
+@keyframes mu-breathe {
+  0%,100% { opacity:.75;transform:translate(-50%,-50%) scale(1); }
+  50% { opacity:1;transform:translate(-50%,-50%) scale(1.12); }
+}
+@keyframes mu-success-glow {
+  0%,100% { opacity:.65;transform:translate(-50%,-50%) scale(1); }
+  50% { opacity:1;transform:translate(-50%,-50%) scale(1.34); }
+}
+
+/* Existing split-screen layout hides its left panel at tablet/mobile sizes. */
+.memory-universe--compact { display:none; }
+@media (max-width: 1000px) {
+  .memory-universe--compact {
+    display:flex;
+    flex:none;
+    margin:-8px auto 10px;
+    min-height:92px;
+    max-height:92px;
+    height:92px;
+    width:100%;
+  }
+  .memory-universe--compact .memory-universe-stage { flex: 1; }
+  .memory-universe--compact .memory-universe-caption,
+  .memory-universe--compact .memory-universe-slot,
+  .memory-universe--compact .memory-universe-orbit--three,
+  .memory-universe--compact .memory-universe-peek { display:none; }
+  .memory-universe--compact .memory-universe-core { gap:0;top:50%; }
+  .memory-universe--compact .memory-universe-core-shell {
+    width:61px;height:61px;border-radius:18px;
+  }
+  .memory-universe--compact .memory-universe-core-shell img { width:41px;height:41px; }
+  .memory-universe--compact .memory-universe-core-name { display:none; }
+  .memory-universe--compact .memory-universe-core-glow { width:135px;height:135px;top:31px; }
+  .memory-universe--compact .memory-universe-vault {
+    width:89px;height:89px;top:50%;
+  }
+  .memory-universe--compact .memory-universe-vault svg {
+    width:23px;height:23px;bottom:-7px;left:calc(50% - 11.5px);padding:5px;
+  }
+  .memory-universe--compact .memory-universe-orbit--one {width:95px;top:50%;}
+  .memory-universe--compact .memory-universe-orbit--two {width:150px;top:50%;}
+  .memory-universe--compact .memory-universe-success {top:calc(50% - 33px);left:calc(50% + 19px);}
+}
+@media (max-width:1000px) and (max-height:760px) {
+  .memory-universe--compact {
+    min-height:62px;max-height:62px;height:62px;margin:-8px auto 7px;
+  }
+  .memory-universe--compact .memory-universe-core-shell {width:45px;height:45px;border-radius:13px;}
+  .memory-universe--compact .memory-universe-core-shell img {width:33px;height:33px;}
+  .memory-universe--compact .memory-universe-vault {width:69px;height:69px;}
+  .memory-universe--compact .memory-universe-orbit--one {width:70px;}
+  .memory-universe--compact .memory-universe-orbit--two {width:108px;}
+}
+@media (max-height:725px) and (min-width:1001px) {
+  .memory-universe { min-height:160px;margin:3px auto 5px; }
+  .memory-universe-chip { padding:6px 9px;min-height:31px;font-size:10px;gap:6px; }
+  .memory-universe-chip-icon { width:19px;height:19px;flex-basis:19px; }
+  .memory-universe-core-shell {width:65px;height:65px;border-radius:19px;}
+  .memory-universe-core-shell img {width:42px;height:42px;}
+  .memory-universe-core { gap:6px; }
+  .memory-universe-core-name { font-size:10px; }
+  .memory-universe-vault {width:102px;height:102px;}
+  .memory-universe-peek { top:calc(46% + 24px); }
+  .memory-universe-caption { min-height:45px;gap:2px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .memory-universe *,
+  .memory-universe *::before,
+  .memory-universe *::after {
+    animation:none !important;
+    transition:none !important;
+    scroll-behavior:auto !important;
+  }
+}
