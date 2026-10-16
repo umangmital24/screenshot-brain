@@ -37,6 +37,28 @@ Never put a Supabase service-role key in the frontend.
 - `public/robots.txt`
 - `public/sitemap.xml`
 
+## Deployment branch mapping
+
+Use **two deployments of the same GitHub repository**. Do not merge the
+landing-page branch into the backend branch just to deploy the website.
+
+| Service | GitHub branch | Root directory | Command |
+| --- | --- | --- | --- |
+| FastAPI backend (Render) | `main` | repository root | `./start.sh` (match your existing backend service configuration) |
+| Vite/React website (Vercel) | `feature/samhaal-landing-seo` | `landing_page` | `npm run build` |
+
+For the **Vercel website project**, choose `feature/samhaal-landing-seo`
+as its *Production Branch* and set its Root Directory to `landing_page`.
+For the **Render API service**, choose `main` as its deploy branch; do not
+change its existing worker or runtime configuration.
+
+Set `VITE_API_BASE` in Vercel to the HTTPS URL of the **main-branch**
+Render API, not to a Vercel URL or a branch name. Both frontend and backend
+must reference the same Supabase project, and the backend must include the
+website origin in `ALLOWED_ORIGINS`.
+
+No raw screenshot uploads or cloud image backup are part of the website.
+
 ## Vercel deployment
 
 When connecting this repository to Vercel, set the project **Root Directory** to:
