@@ -4,33 +4,112 @@ import { supabase } from './supabaseClient'
 // The browser uses the same Supabase identity as Samhaal Android.
 // Google browser sign-in stays disabled until the domain is authorized by Google.
 
+
 /**
- * A little Samhaal memory companion: it follows the pointer and the email
- * field, then covers its eyes when the password field has focus.
- * Only focus state and pointer position are used; no input value is observed.
+ * Samhaal's playful memory companion. It tracks pointer position, focus and
+ * non-sensitive auth status only. It never reads email or password text.
  */
-function MemoryCompanion({ attention, stageRef }) {
+function MemoryCompanion({ attention, feedback, compact = false }) {
+  const sceneRef = useRef(null)
+  const clearReactionRef = useRef(null)
+  const nextReactionRef = useRef(0)
+  const [reaction, setReaction] = useState(null)
+
   const secret = attention === 'password'
   const reading = attention === 'email'
-  const headline = secret ? 'Your secret is safe.' : reading ? 'Oh, a new memory?' : 'Your memory companion'
-  const subtitle = secret
-    ? "I'm looking away. Type freely."
-    : reading ? 'Just making sure you feel at home.' : 'Always curious. Never intrusive.'
+  const mood = secret ? 'secret' : reaction?.mood || (feedback === 'sent' ? 'happy' : feedback === 'error' ? 'surprised' : reading ? 'curious' : 'idle')
+  const prompts = {
+    idle: ['Meet Memo, your memory buddy!', 'Tap Memo or a floating memory to play.'],
+    curious: ['Ooh, hello there!', 'I love meeting familiar memories.'],
+    secret: ['No peeking. Promise!', 'Your password is for your eyes only.'],
+    happy: ['A little happiness, saved! ✦', 'Memo is doing a happy dance.'],
+    wink: ['Got it. Remembered!', 'One wink, one more good memory.'],
+    surprised: ['Whoa, a new discovery!', 'There is always something to remember.'],
+    sleepy: ['Even memories need naps…', 'Tap again to wake Memo up.'],
+    proud: ['Memory found! ✦', 'The little things are worth keeping.'],
+  }
+  const [title, subtitle] = reaction && !secret
+    ? [reaction.title, reaction.subtitle]
+    : feedback === 'sent' && !secret
+      ? ['Check your inbox! ✦', 'Memo is cheering you on.']
+      : feedback === 'error' && !secret
+        ? ['Oops, try once more?', "Memo's still rooting for you."]
+        : prompts[mood]
+
+  useEffect(() => {
+    const scene = sceneRef.current
+    if (!scene || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const onPointerMove = event => {
+      const bounds = scene.getBoundingClientRect()
+      if (!bounds.width || !bounds.height) return
+      const x = Math.max(-1, Math.min(1, (event.clientX - (bounds.left + bounds.width / 2)) / (bounds.width / 2)))
+      const y = Math.max(-1, Math.min(1, (event.clientY - (bounds.top + bounds.height / 2)) / (bounds.height / 2)))
+      scene.style.setProperty('--pupil-x', (x * 7).toFixed(1) + 'px')
+      scene.style.setProperty('--pupil-y', (y * 5).toFixed(1) + 'px')
+    }
+    window.addEventListener('pointermove', onPointerMove, { passive: true })
+    return () => window.removeEventListener('pointermove', onPointerMove)
+  }, [])
+
+  useEffect(() => () => window.clearTimeout(clearReactionRef.current), [])
+
+  function play(kind) {
+    window.clearTimeout(clearReactionRef.current)
+    const cycle = [
+      { mood: 'happy', title: 'You made Memo smile! ✦', subtitle: 'Tap again — Memo has more moods.' },
+      { mood: 'wink', title: 'Psst… memory saved!', subtitle: "That's our little secret." },
+      { mood: 'surprised', title: 'Oh! You found me!', subtitle: 'An unexpected memory moment.' },
+      { mood: 'sleepy', title: 'Zzz… just resting my leaves.', subtitle: 'Tap to wake Memo up.' },
+    ]
+    const next = kind === 'movie'
+      ? { mood: 'surprised', title: 'Movie night unlocked! ▶', subtitle: 'Find your Watch Later list in Samhaal.' }
+      : kind === 'saved'
+        ? { mood: 'proud', title: 'Keep that memory close! ✦', subtitle: 'Every memory has a place.' }
+        : cycle[nextReactionRef.current++ % cycle.length]
+    setReaction(next)
+    clearReactionRef.current = window.setTimeout(() => setReaction(null), 2700)
+  }
 
   return (
-    <div className={'portal-companion-scene' + (secret ? ' is-secret' : '') + (reading ? ' is-reading' : '')} ref={stageRef} aria-hidden="true">
-      <div className="portal-companion-halo" />
-      <div className="portal-companion-grid" />
-      <div className="portal-companion-memory portal-companion-memory-one">
-        <span className="portal-companion-memory-symbol">▶</span>
+    <div
+      ref={sceneRef}
+      className={'portal-companion-scene' + (compact ? ' portal-companion-compact' : '') + ' is-' + mood}
+    >
+      <div className="portal-companion-halo" aria-hidden="true" />
+      <div className="portal-companion-grid" aria-hidden="true" />
+      <span className="portal-companion-spark portal-companion-spark-one" aria-hidden="true">✦</span>
+      <span className="portal-companion-spark portal-companion-spark-two" aria-hidden="true">✧</span>
+      <span className="portal-companion-spark portal-companion-spark-three" aria-hidden="true">✦</span>
+
+      <button
+        type="button"
+        className="portal-companion-memory portal-companion-memory-one"
+        onClick={() => play('movie')}
+        title="Play with a saved movie memory"
+        aria-label="Play with a saved movie memory"
+      >
+        <span className="portal-companion-memory-symbol" aria-hidden="true">▶</span>
         <span><strong>Interstellar</strong><small>Watch later</small></span>
-      </div>
-      <div className="portal-companion-memory portal-companion-memory-two">
-        <span className="portal-companion-memory-symbol">✦</span>
+      </button>
+      <button
+        type="button"
+        className="portal-companion-memory portal-companion-memory-two"
+        onClick={() => play('saved')}
+        title="Play with a saved memory"
+        aria-label="Play with a saved memory"
+      >
+        <span className="portal-companion-memory-symbol" aria-hidden="true">✦</span>
         <span><strong>Remembered</strong><small>Saved to Samhaal</small></span>
-      </div>
-      <div className="portal-companion-sprite">
-        <svg className="portal-companion-svg" viewBox="0 0 300 255" fill="none" xmlns="http://www.w3.org/2000/svg">
+      </button>
+
+      <button
+        type="button"
+        className="portal-companion-sprite"
+        onClick={() => play()}
+        title="Tap Memo to discover a new expression"
+        aria-label="Play with Memo, the Samhaal memory companion"
+      >
+        <svg className="portal-companion-svg" viewBox="0 0 300 255" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <ellipse cx="151" cy="239" rx="69" ry="10" fill="#08080a" opacity=".18" />
           <g className="portal-companion-leaf">
             <path d="M146 42C169 15 208 14 225 21C220 40 201 61 176 69" fill="#dbdce3" stroke="#e9eaf0" strokeWidth="3" strokeLinejoin="round" />
@@ -39,20 +118,33 @@ function MemoryCompanion({ attention, stageRef }) {
             <ellipse cx="95" cy="157" rx="13" ry="7" fill="#f5b0b8" opacity=".32" />
             <ellipse cx="204" cy="157" rx="13" ry="7" fill="#f5b0b8" opacity=".32" />
             <g className="portal-companion-eyes">
-              <ellipse cx="119" cy="139" rx="17" ry="19" fill="#e2e4e9" opacity=".65" />
-              <ellipse cx="180" cy="139" rx="17" ry="19" fill="#e2e4e9" opacity=".65" />
-              <g className="portal-companion-pupils">
-                <ellipse cx="119" cy="140" rx="8.5" ry="11" fill="#17171c" />
-                <ellipse cx="180" cy="140" rx="8.5" ry="11" fill="#17171c" />
-                <circle cx="122" cy="135" r="2.7" fill="#fff" opacity=".9" />
-                <circle cx="183" cy="135" r="2.7" fill="#fff" opacity=".9" />
+              <g className="portal-companion-left-eye">
+                <ellipse cx="119" cy="139" rx="17" ry="19" fill="#e2e4e9" opacity=".65" />
+                <g className="portal-companion-pupils">
+                  <ellipse cx="119" cy="140" rx="8.5" ry="11" fill="#17171c" />
+                  <circle cx="122" cy="135" r="2.7" fill="#fff" opacity=".9" />
+                </g>
+              </g>
+              <g className="portal-companion-right-eye">
+                <ellipse cx="180" cy="139" rx="17" ry="19" fill="#e2e4e9" opacity=".65" />
+                <g className="portal-companion-pupils">
+                  <ellipse cx="180" cy="140" rx="8.5" ry="11" fill="#17171c" />
+                  <circle cx="183" cy="135" r="2.7" fill="#fff" opacity=".9" />
+                </g>
               </g>
             </g>
             <g className="portal-companion-shy-eyes">
               <path d="M107 143Q119 151 131 141" stroke="#2a2a32" strokeWidth="4" strokeLinecap="round" />
               <path d="M168 141Q181 152 192 141" stroke="#2a2a32" strokeWidth="4" strokeLinecap="round" />
             </g>
+            <path className="portal-companion-wink-eye" d="M166 141Q180 151 193 141" stroke="#24242a" strokeWidth="4.5" strokeLinecap="round" />
+            <g className="portal-companion-eyebrows">
+              <path d="M107 111Q119 104 131 109" stroke="#777987" strokeWidth="3" strokeLinecap="round" />
+              <path d="M169 109Q182 103 194 112" stroke="#777987" strokeWidth="3" strokeLinecap="round" />
+            </g>
             <path className="portal-companion-smile" d="M141 169Q150 177 161 169" stroke="#27272a" strokeWidth="3.7" strokeLinecap="round" />
+            <path className="portal-companion-happy-smile" d="M132 166Q150 193 169 166Q152 174 132 166Z" fill="#42424b" stroke="#27272a" strokeWidth="2.5" strokeLinejoin="round" />
+            <ellipse className="portal-companion-surprise-mouth" cx="150" cy="174" rx="8.5" ry="12" fill="#34343b" />
             <path className="portal-companion-secret-smile" d="M144 174Q150 171 156 174" stroke="#27272a" strokeWidth="3.7" strokeLinecap="round" />
           </g>
           <g className="portal-companion-hands">
@@ -60,10 +152,13 @@ function MemoryCompanion({ attention, stageRef }) {
             <path d="M231 187C219 168 195 151 181 144C172 140 169 148 175 153L193 171L165 153C157 148 152 154 159 161L192 190C208 204 226 208 231 187Z" fill="#d9dce4" stroke="#adb0bc" strokeWidth="2.5" />
           </g>
         </svg>
-        <span className="portal-companion-mood" aria-hidden="true">{secret ? '🙈' : reading ? '✉' : '✦'}</span>
-      </div>
-      <div className="portal-companion-caption">
-        <strong>{headline}</strong>
+        <span className="portal-companion-mood" aria-hidden="true">
+          {mood === 'secret' ? '🙈' : mood === 'wink' ? '😉' : mood === 'sleepy' ? '💤' : mood === 'surprised' ? '!' : mood === 'happy' || mood === 'proud' ? '✦' : reading ? '✉' : '♡'}
+        </span>
+      </button>
+
+      <div className="portal-companion-caption" aria-live="polite" aria-atomic="true">
+        <strong>{title}</strong>
         <span>{subtitle}</span>
       </div>
     </div>
@@ -74,7 +169,6 @@ export default function LoginPage() {
   const [mode, setMode] = useState('login')
   const [loginMethod, setLoginMethod] = useState('magic')
   const [attention, setAttention] = useState('idle')
-  const mascotStageRef = useRef(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [working, setWorking] = useState(false)
@@ -93,21 +187,6 @@ export default function LoginPage() {
   }, [])
 
 
-  useEffect(() => {
-    // Pointer tracking is purely decorative. Never inspect form values.
-    const scene = mascotStageRef.current
-    if (!scene || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-
-    const onMove = event => {
-      const bounds = scene.getBoundingClientRect()
-      const relativeX = Math.max(-1, Math.min(1, (event.clientX - (bounds.left + bounds.width * .5)) / (bounds.width * .5)))
-      const relativeY = Math.max(-1, Math.min(1, (event.clientY - (bounds.top + bounds.height * .5)) / (bounds.height * .5)))
-      scene.style.setProperty('--pupil-x', (relativeX * 7).toFixed(1) + 'px')
-      scene.style.setProperty('--pupil-y', (relativeY * 5).toFixed(1) + 'px')
-    }
-    window.addEventListener('pointermove', onMove, { passive: true })
-    return () => window.removeEventListener('pointermove', onMove)
-  }, [])
 
   function switchLoginMethod(next) {
     setLoginMethod(next)
@@ -209,7 +288,7 @@ export default function LoginPage() {
               Books, movies, places, and ideas. Samhaal turns the screenshots you save into memories you can find again.
             </p>
 
-            <MemoryCompanion attention={attention} stageRef={mascotStageRef} />
+            <MemoryCompanion attention={attention} feedback={notice ? 'sent' : message ? 'error' : ''} />
 
             <div className="portal-visual-trust">
               <span className="portal-trust-icon" aria-hidden="true">✓</span>
@@ -220,6 +299,7 @@ export default function LoginPage() {
 
         <section className="portal-auth-card portal-auth-card-compact" aria-labelledby="login-title">
           <div className="portal-auth-card-inner">
+            <MemoryCompanion attention={attention} feedback={notice ? 'sent' : message ? 'error' : ''} compact />
             <p className="portal-eyebrow">YOUR PRIVATE MEMORY SPACE</p>
             <h1 id="login-title">{creatingAccount ? 'Make memories last.' : 'Welcome back.'}</h1>
             <p className="portal-muted">
