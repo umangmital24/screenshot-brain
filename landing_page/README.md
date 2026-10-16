@@ -104,8 +104,11 @@ The primary navigation now links to `#story`. Existing FAQ, waitlist, and metada
 
 ### Required deployment configuration
 
-Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (public publishable key), and `VITE_API_BASE` in Vercel. Use the **same Supabase project** as the Android app. Do not expose Supabase service-role keys to the frontend.
+The web Supabase client falls back to the **same public Supabase URL and publishable key used by Android on `main`**. This allows existing Samhaal users to log in without setting separate Vercel auth variables. For production maintainability, optionally set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in Vercel to that same project (these override the fallback); `VITE_API_BASE` must point to your deployed FastAPI service. Never expose Supabase service-role keys to the frontend. If the Android Supabase project changes in the future, keep the website configuration in sync.
 
 In Supabase Auth settings, allow `https://YOUR-WEB-DOMAIN/auth/callback` as an OAuth/email redirect URL, and configure the Google provider appropriately. Configure FastAPI `ALLOWED_ORIGINS` to include the exact web origin (and your local Vite dev origin). The web app sends Supabase access tokens in Authorization Bearer headers to the existing protected API routes.
+
+
+Note: the public `/waitlist` form uses the FastAPI `/waitlist` endpoint and its server-side Supabase connection, so working waitlist submissions do **not** mean browser Supabase Auth is configured. Google login on web additionally requires the site's `/auth/callback` URL to be allowlisted in Supabase Auth.
 
 The existing waitlist and marketing story remain unchanged. The `prebuild` reconstructs `LandingPage.jsx` from `src/fragments/LandingPage.part*.txt`: **edit the fragment**, not the generated JSX, for future landing-page navigation changes.
