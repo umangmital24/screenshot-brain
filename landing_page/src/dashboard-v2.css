@@ -1,5 +1,5 @@
 /* Samhaal Web v2 — shares the mobile app's white / #09090B design tokens. */
-.sv-app{--sv-black:#09090b;--sv-text:#09090b;--sv-secondary:#52525b;--sv-muted:#71717a;--sv-faint:#a1a1aa;--sv-border:rgba(0,0,0,.09);--sv-border-light:rgba(0,0,0,.06);--sv-soft:#f8fafc;display:flex;min-height:100vh;background:#fff;color:var(--sv-text);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px}
+.portal-shell.sv-app{--sv-black:#09090b;--sv-text:#09090b;--sv-secondary:#52525b;--sv-muted:#71717a;--sv-faint:#a1a1aa;--sv-border:rgba(0,0,0,.09);--sv-border-light:rgba(0,0,0,.06);--sv-soft:#f8fafc;display:flex;min-height:100vh;background:#fff;color:var(--sv-text);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px}
 .sv-app button,.sv-app input,.sv-app textarea,.sv-app select{font-family:inherit}
 .sv-app button{cursor:pointer}
 .sv-app button:disabled{cursor:not-allowed;opacity:.48}
