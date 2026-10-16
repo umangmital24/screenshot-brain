@@ -596,6 +596,7 @@ a {
 }
 
 .landing-hero-btn-primary {
+  text-decoration: none;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -620,6 +621,7 @@ a {
 }
 
 .landing-hero-btn-secondary {
+  text-decoration: none;
   display: inline-flex;
   align-items: center;
   gap: 8px;
