@@ -1,13 +1,15 @@
 import asyncio
+import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.services.db import get_client, get_signed_screenshot_url
 from app.services.auth import get_current_user_id
 from app.services.entitlements import enforce_monthly_limit
 from app.services.query_parser import parse_ask_query
 from app.services.retrieval import retrieve_memories, compose_retrieval_answer
-from app.services.ask_ai import generate_grounded_answer
+from app.services.ask_ai import generate_grounded_answer, iter_grounded_answer_chunks
 from app.models.schema import ChatRequest, ChatResponse, ChatSource
 
 logger = logging.getLogger(__name__)
@@ -146,3 +148,128 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
     })
 
     return ChatResponse(answer=answer, memories_used=len(memories), sources=sources)
+
+
+def _sse_event(kind: str, **data) -> str:
+    """Server-Sent Events frame, consumable through POST fetch() streaming."""
+    return "data: " + json.dumps({"type": kind, **data}, ensure_ascii=False) + "\\n\\n"
+
+
+@router.post("/stream")
+async def chat_stream(req: ChatRequest, user_id: str = Depends(get_current_user_id)):
+    """Stream grounded Ask tokens without changing Android's existing POST /chat.
+
+    Authentication and monthly limits are checked before the stream opens.
+    The stream sends status, metadata-only sources, token deltas and done/error.
+    """
+    enforce_monthly_limit(
+        user_id=user_id,
+        entitlement_key="ask_queries_per_month",
+        usage_event_type="ask_query",
+    )
+
+    async def event_generator():
+        parsed = _parse_with_history(req)
+        client = get_client()
+        metadata = {"mode": parsed.mode, "retrieved_count": 0}
+        try:
+            yield _sse_event("status", text="Searching your saved memories…")
+            try:
+                memories = await asyncio.to_thread(retrieve_memories, user_id, parsed, 8)
+            except Exception:
+                logger.exception("Streaming memory retrieval failed")
+                yield _sse_event("error", message="Memory search is temporarily unavailable.")
+                return
+
+            metadata["retrieved_count"] = len(memories)
+            # Do not sign or expose cloud image URLs in the metadata-only web stream.
+            sources = [
+                ChatSource(
+                    memory_id=memory["id"],
+                    screenshot_id=memory.get("screenshot_id"),
+                    item_name=memory.get("item_name") or "Saved item",
+                    intent=memory.get("intent"),
+                    category=memory.get("category"),
+                    summary=memory.get("summary"),
+                    extracted_text=memory.get("extracted_text"),
+                    visual_context=memory.get("visual_context"),
+                    image_url=None,
+                ).model_dump(mode="json")
+                for memory in memories
+            ]
+            yield _sse_event("sources", sources=sources)
+
+            answer_fallback = compose_retrieval_answer(parsed, memories)
+            total_chars = 0
+            completed = True
+            model_usage = {}
+
+            if parsed.mode == "reason" and memories:
+                yield _sse_event("status", text="Putting your memories together…")
+                queue = asyncio.Queue()
+                loop = asyncio.get_running_loop()
+
+                def generate_in_thread():
+                    try:
+                        for update in iter_grounded_answer_chunks(req.question, memories, req.history):
+                            loop.call_soon_threadsafe(queue.put_nowait, update)
+                    except Exception:
+                        logger.warning("Gemini streaming unavailable for Ask", exc_info=True)
+                        loop.call_soon_threadsafe(queue.put_nowait, {"type": "failed"})
+                    finally:
+                        loop.call_soon_threadsafe(queue.put_nowait, {"type": "end"})
+
+                worker = asyncio.create_task(asyncio.to_thread(generate_in_thread))
+                try:
+                    while True:
+                        update = await queue.get()
+                        if update["type"] == "end":
+                            break
+                        if update["type"] == "token":
+                            delta = update["text"]
+                            if delta:
+                                total_chars += len(delta)
+                                yield _sse_event("token", text=delta)
+                        elif update["type"] == "usage":
+                            model_usage = update["data"]
+                        elif update["type"] == "failed":
+                            if total_chars:
+                                completed = False
+                                yield _sse_event("error", message="The answer stopped partway through. Please try again.")
+                            break
+                finally:
+                    # Cancelling a to_thread task cannot forcibly interrupt an SDK
+                    # network request, but avoids retaining the async task on exit.
+                    if not worker.done():
+                        worker.cancel()
+
+            if completed:
+                if total_chars == 0:
+                    # Retrieval-only answers and LLM outages don't generate tokens;
+                    # send their real result once rather than simulating typing.
+                    yield _sse_event("token", text=answer_fallback)
+                metadata["model"] = model_usage.get("model")
+                metadata["provider_usage"] = {k: v for k, v in model_usage.items() if k != "model"}
+                metadata["filters"] = {
+                    "intent": parsed.intent,
+                    "colors": list(parsed.colors),
+                    "terms": list(parsed.terms),
+                    "since_days": parsed.since_days,
+                    "before_days": parsed.before_days,
+                }
+                await asyncio.to_thread(_record_usage, client, req, user_id, metadata)
+                yield _sse_event("done", memories_used=len(memories))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Unexpected Ask streaming error")
+            yield _sse_event("error", message="Could not complete this answer. Please try again.")
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
