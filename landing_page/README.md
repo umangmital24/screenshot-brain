@@ -44,7 +44,7 @@ landing-page branch into the backend branch just to deploy the website.
 
 | Service | GitHub branch | Root directory | Command |
 | --- | --- | --- | --- |
-| FastAPI backend (Render) | `main` | repository root | `./start.sh` (match your existing backend service configuration) |
+| FastAPI backend (Render) | `main` | repository root | `bash start.sh` (match your existing backend service configuration) |
 | Vite/React website (Vercel) | `feature/samhaal-landing-seo` | `landing_page` | `npm run build` |
 
 For the **Vercel website project**, choose `feature/samhaal-landing-seo`
