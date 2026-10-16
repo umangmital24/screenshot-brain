@@ -93,6 +93,25 @@ The seven original phone screenshots are now included at `public/story/01.webp` 
 
 The primary navigation now links to `#story`. Existing FAQ, waitlist, and metadata are preserved. A GitHub Actions workflow (`.github/workflows/samhaal-website-build.yml`) checks Vite builds on changes to this branch.
 
+## Samhaal Web dashboard UI (v2)
+
+The logged-in `/dashboard` now mirrors the Android app design tokens from
+`android_app/src/theme.js`: white canvas, `#09090B` ink, subtle gray
+borders, rounded memory cards, and a restrained black/white accent system.
+
+Desktop web has persistent sidebar navigation (Overview, All Memories, Ask
+Samhaal, Completed, and intent categories), a searchable memory library,
+quick completion controls, a metadata detail/edit drawer, and a dedicated
+Ask conversation with clickable memory sources. Mobile browsers receive
+touch-friendly cards and a bottom tab bar. Keyboard shortcut **Ctrl/⌘+K**
+opens the memory search.
+
+All memory data flows through the existing authenticated FastAPI endpoints
+(`/memories`, `/memories/summary`, `PATCH/DELETE /memories/{id}`,
+and `/chat`). The web UI never displays or uploads the original screenshot
+images; it only uses extracted text and metadata. Design source files:
+`src/DashboardPage.jsx` and `src/dashboard-v2.css`.
+
 ## Samhaal Web login and Android download
 
 - The landing-page header and mobile menu now link to `/login` and `/get-app`.
