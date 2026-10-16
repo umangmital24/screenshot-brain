@@ -344,8 +344,8 @@ export default function DashboardPage() {
     {sidebarOpen && <button className="sv-mobile-scrim" type="button" aria-label="Close navigation" onClick={() => setSidebarOpen(false)} />}
     <aside className={'sv-sidebar' + (sidebarOpen ? ' sv-sidebar-open' : '')} aria-label="Dashboard navigation">
       <a className="sv-brand" href="/" title="Samhaal homepage">
-        <span className="sv-brand-mark">✦</span>
-        <span className="sv-brand-word">samhaal<span className="sv-brand-native">संभाल</span></span>
+        <img src="/samhaal-logo.svg" alt="" className="sv-brand-logo" />
+        <span className="sv-brand-word">Samhaal<span className="sv-brand-native">संभाल</span></span>
       </a>
       <div className="sv-side-label">WORKSPACE</div>
       <nav className="sv-nav">
