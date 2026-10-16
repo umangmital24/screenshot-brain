@@ -230,3 +230,5 @@
 .sv-chat-response .sv-streaming-text{white-space:pre-wrap}
 .sv-stream-cursor{display:inline-block;vertical-align:middle;width:2px;height:1em;background:#09090b;margin-left:3px;animation:sv-cursor-blink 1s steps(1) infinite}
 @keyframes sv-cursor-blink{50%{opacity:0}}
+
+.sv-assistant-logo{height:30px;width:30px;display:block;object-fit:contain;border-radius:9px}
