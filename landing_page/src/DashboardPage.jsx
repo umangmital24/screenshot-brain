@@ -96,6 +96,66 @@ async function api(path, options = {}) {
   }
   return payload
 }
+
+async function streamAskAnswer(payload, onEvent) {
+  const { data, error } = await supabase.auth.getSession()
+  if (error || !data.session) throw new Error('Your session expired. Please sign in again.')
+  const response = await fetch(API_BASE + '/chat/stream', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + data.session.access_token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  // A deployment may temporarily have the old backend but the new frontend.
+  // Only a missing route can safely fall back; avoid double-counting real Ask calls.
+  if (response.status === 404 || response.status === 405) {
+    const legacy = await api('/chat', { method: 'POST', body: JSON.stringify(payload) })
+    onEvent({ type: 'sources', sources: legacy.sources || [] })
+    onEvent({ type: 'token', text: legacy.answer || '' })
+    onEvent({ type: 'done' })
+    return
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}))
+    throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Unable to search memories (' + response.status + ').')
+  }
+  if (!response.body) throw new Error('The server did not return a readable stream.')
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let completed = false
+  let streamError = ''
+  const consumeFrame = frame => {
+    const line = frame.split('\n').filter(x => x.startsWith('data:')).map(x => x.slice(5).trimStart()).join('\n')
+    if (!line) return
+    const event = JSON.parse(line)
+    if (event.type === 'error') streamError = event.message || 'The answer could not be completed.'
+    if (event.type === 'done') completed = true
+    onEvent(event)
+  }
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+      let boundary = buffer.indexOf('\n\n')
+      while (boundary !== -1) {
+        consumeFrame(buffer.slice(0, boundary))
+        buffer = buffer.slice(boundary + 2)
+        boundary = buffer.indexOf('\n\n')
+      }
+      if (streamError) throw new Error(streamError)
+    }
+    buffer += decoder.decode().replace(/\r\n/g, '\n')
+    if (buffer.trim()) consumeFrame(buffer)
+    if (streamError) throw new Error(streamError)
+    if (!completed) throw new Error('The connection ended before your answer finished. Please try again.')
+  } finally {
+    reader.releaseLock()
+  }
+}
+
 function MemoryCard({ memory, onOpen, onToggle, busy }) {
   const meta = intentInfo(memory.intent)
   return <article className={'sv-memory-card' + (memory.is_done ? ' is-complete' : '')}>
@@ -297,26 +357,36 @@ export default function DashboardPage() {
     const question = String(text || askInput).trim()
     if (!question || askBusy) return
     const history = chatLog
-      .filter(x => !x.error)
+      .filter(x => !x.error && !x.pending)
       .flatMap(x => [{ role: 'user', text: x.question }, ...(x.answer ? [{ role: 'assistant', text: x.answer }] : [])])
       .slice(-10)
       .map(x => ({ role: x.role, text: x.text.slice(0, 1500) }))
+    const id = crypto.randomUUID()
     setAskBusy(true)
     setAskInput('')
-    setChatLog(prev => [...prev, { question, answer: '', sources: [], pending: true }])
+    setChatLog(prev => [...prev, { id, question, answer: '', sources: [], status: 'Searching your saved memories…', pending: true }])
+    const update = fn => setChatLog(prev => prev.map(item => item.id === id ? fn(item) : item))
     try {
-      const result = await api('/chat', {
-        method: 'POST',
-        body: JSON.stringify({ question, history, client_request_id: crypto.randomUUID() }),
+      await streamAskAnswer({ question, history, client_request_id: id }, event => {
+        if (event.type === 'status') {
+          update(item => ({ ...item, status: event.text || 'Thinking…' }))
+        } else if (event.type === 'sources') {
+          update(item => ({ ...item, sources: event.sources || [] }))
+        } else if (event.type === 'token') {
+          update(item => ({ ...item, answer: item.answer + (event.text || ''), status: '' }))
+        } else if (event.type === 'done') {
+          update(item => ({ ...item, pending: false, status: '', answer: cleanText(item.answer) }))
+        }
       })
-      setChatLog(prev => prev.map((item, index) => index === prev.length - 1 && item.pending
-        ? { ...item, answer: cleanText(result.answer), sources: result.sources || [], pending: false }
-        : item))
     } catch (err) {
-      setChatLog(prev => prev.map((item, index) => index === prev.length - 1 && item.pending
-        ? { ...item, answer: err.message || 'Could not reach your memories. Try again.', sources: [], error: true, pending: false }
-        : item))
-    } finally { setAskBusy(false) }
+      update(item => ({ ...item, error: true, pending: false, status: '',
+        answer: item.answer
+          ? item.answer + '\n\n' + (err.message || 'Stream interrupted.')
+          : (err.message || 'Could not reach your memories. Try again.'),
+      }))
+    } finally {
+      setAskBusy(false)
+    }
   }
   async function signOut() {
     await supabase.auth.signOut()
@@ -428,7 +498,7 @@ export default function DashboardPage() {
           <div className="sv-chat-panel">
             <div className="sv-chat-thread">
               {!chatLog.length && <div className="sv-chat-welcome"><div className="sv-ask-symbol"><Icon name="sparkles" size={26}/></div><h2>What are you looking for?</h2><p>No need to remember the exact filename, date or wording. Just ask.</p><div className="sv-ask-suggestions">{SUGGESTIONS.map(s => <button type="button" key={s} onClick={() => ask(null, s)} disabled={askBusy}><span>{s}</span><Icon name="arrow" size={16}/></button>)}</div></div>}
-              {chatLog.map((msg, i) => <div className="sv-chat-turn" key={i}><div className="sv-chat-user"><span>{msg.question}</span></div><div className={'sv-chat-assistant' + (msg.error ? ' sv-chat-failed' : '')}><span className="sv-assistant-avatar">✦</span><div className="sv-chat-response">{msg.pending ? <div className="sv-typing"><i/><i/><i/><span>Looking through your memories…</span></div> : <p>{msg.answer}</p>}
+              {chatLog.map((msg, i) => <div className="sv-chat-turn" key={i}><div className="sv-chat-user"><span>{msg.question}</span></div><div className={'sv-chat-assistant' + (msg.error ? ' sv-chat-failed' : '')}><span className="sv-assistant-avatar">✦</span><div className="sv-chat-response">{msg.pending && !msg.answer ? <div className="sv-typing"><i/><i/><i/><span>{msg.status || 'Searching your memories…'}</span></div> : <p className={msg.pending ? 'sv-streaming-text' : undefined}>{msg.answer}{msg.pending && <span className="sv-stream-cursor" aria-hidden="true" />}</p>}
                 {!msg.pending && msg.sources?.length > 0 && <div className="sv-answer-sources"><strong>From your memories <span>{msg.sources.length}</span></strong><div className="sv-source-grid">{msg.sources.map((source, n) => <button key={source.memory_id || n} type="button" className="sv-source-item" onClick={() => openMemory({ ...source, id: source.memory_id })}><span className="sv-source-icon"><Icon name={intentInfo(source.intent).icon} size={17}/></span><span className="sv-source-name"><b>{source.item_name || 'Saved memory'}</b><small>{source.category || intentInfo(source.intent).label + ' later'}</small></span><Icon name="arrow" size={15}/></button>)}</div></div>}
               </div></div></div>)}
               <div ref={chatBottom}/>
