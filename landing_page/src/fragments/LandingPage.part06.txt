@@ -62,6 +62,7 @@
           <div className="footer-top">
             <div className="footer-brand-column">
               <div className="landing-brand landing-brand-wordmark">
+                <img className="samhaal-landing-logo" src="/samhaal-logo.svg" alt="" aria-hidden="true" />
                 <span className="landing-brand-text">Samhaal</span>
                 <span className="landing-brand-sub">संभाल</span>
               </div>
