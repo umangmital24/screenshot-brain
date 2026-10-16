@@ -176,6 +176,7 @@
             }}
             title="Samhaal (संभाल)"
           >
+            <img className="samhaal-landing-logo" src="/samhaal-logo.svg" alt="" aria-hidden="true" />
             <span className="landing-brand-text">Samhaal</span>
             <span className="landing-brand-sub">संभाल</span>
           </a>
