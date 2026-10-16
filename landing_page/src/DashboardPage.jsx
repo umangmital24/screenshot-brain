@@ -184,6 +184,9 @@ export default function DashboardPage() {
   const [checking, setChecking] = useState(true)
   const [view, setView] = useState(initialView)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [intent, setIntent] = useState('')
@@ -205,6 +208,9 @@ export default function DashboardPage() {
   const searchRef = useRef(null)
   const chatBottom = useRef(null)
   const detailClose = useRef(null)
+  const profileMenuRef = useRef(null)
+  const profileButtonRef = useRef(null)
+  const profileLogoutRef = useRef(null)
 
   useEffect(() => {
     let mounted = true
@@ -224,6 +230,7 @@ export default function DashboardPage() {
 
   const effectiveStatus = view === 'completed' ? 'true' : statusFilter
   const applyView = (next) => {
+    setProfileOpen(false)
     setView(next)
     setSidebarOpen(false)
     setOffset(0)
@@ -243,7 +250,10 @@ export default function DashboardPage() {
         // Wait until the Memory Library has mounted the search input.
         window.setTimeout(() => searchRef.current?.focus(), 0)
       }
-      if (event.key === 'Escape') { setSelected(null); setSidebarOpen(false) }
+      if (event.key === 'Escape') {
+        setSelected(null)
+        setSidebarOpen(false)
+      }
     }
     window.addEventListener('popstate', onPopState)
     window.addEventListener('keydown', onKeyDown)
@@ -252,6 +262,28 @@ export default function DashboardPage() {
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [])
+
+  useEffect(() => {
+    if (!profileOpen) return
+    const handleOutsideClick = (event) => {
+      if (!profileMenuRef.current?.contains(event.target)) {
+        setProfileOpen(false)
+      }
+    }
+    const handleMenuKeys = (event) => {
+      if (event.key === 'Escape') {
+        setProfileOpen(false)
+        profileButtonRef.current?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', handleOutsideClick)
+    document.addEventListener('keydown', handleMenuKeys)
+    profileLogoutRef.current?.focus()
+    return () => {
+      document.removeEventListener('pointerdown', handleOutsideClick)
+      document.removeEventListener('keydown', handleMenuKeys)
+    }
+  }, [profileOpen])
 
   useEffect(() => {
     if (!session) return
@@ -389,8 +421,18 @@ export default function DashboardPage() {
     }
   }
   async function signOut() {
-    await supabase.auth.signOut()
-    window.location.replace('/')
+    if (signingOut) return
+    setSigningOut(true)
+    setLogoutError('')
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      window.location.replace('/login')
+    } catch (err) {
+      setLogoutError(err?.message || 'Could not log out. Please try again.')
+      setProfileOpen(true)
+      setSigningOut(false)
+    }
   }
 
   if (checking) return <main className="portal-shell"><p className="portal-loading">Opening your Samhaal memories…</p></main>
@@ -432,9 +474,9 @@ export default function DashboardPage() {
       <div className="sv-sidebar-foot">
         <div className="sv-private-note"><Icon name="shield" size={16} /><div><strong>Private by design</strong><span>Original screenshots stay on your phone.</span></div></div>
         <a className="sv-download" href="/get-app"><Icon name="smartphone" size={17} /> Get the Android app <Icon name="arrow" size={15} /></a>
-        <button className="sv-account-line" type="button" onClick={signOut} title="Log out">
+        <button className="sv-account-line" type="button" onClick={signOut} disabled={signingOut} title="Log out of Samhaal">
           <span className="sv-avatar">{(session?.user?.email || 'S').slice(0, 1).toUpperCase()}</span>
-          <span className="sv-account-info"><strong>My account</strong><small>{session?.user?.email || 'Signed in'}</small></span>
+          <span className="sv-account-info"><strong>{signingOut ? 'Logging out…' : 'Log out'}</strong><small>{session?.user?.email || 'Signed in'}</small></span>
           <Icon name="logout" size={17} />
         </button>
       </div>
@@ -447,9 +489,54 @@ export default function DashboardPage() {
           <span className="sv-breadcrumb">My workspace</span><Icon name="chevron" size={13} /><strong>{view === 'home' ? 'Overview' : view === 'memories' ? 'Memory library' : view === 'ask' ? 'Ask Samhaal' : 'Completed'}</strong>
         </div>
         <div className="sv-top-actions">
-          <button className="sv-top-search" type="button" onClick={() => { applyView('memories'); setTimeout(() => searchRef.current?.focus(), 0) }}><Icon name="search" size={16} /><span>Search your memories</span><kbd>⌘ K</kbd></button>
-          <button className="sv-top-refresh" type="button" title="Refresh memories" aria-label="Refresh memories" onClick={refresh}><Icon name="refresh" size={17} /></button>
-          <span className="sv-avatar sv-top-avatar">{(session?.user?.email || 'S').slice(0, 1).toUpperCase()}</span>
+          <button
+            className="sv-top-search"
+            type="button"
+            title="Search memories (Ctrl/⌘ + K)"
+            aria-label="Open memory search"
+            onClick={() => { applyView('memories'); window.setTimeout(() => searchRef.current?.focus(), 0) }}
+          ><Icon name="search" size={20} /></button>
+          <button
+            className={'sv-top-refresh' + (loading ? ' is-refreshing' : '')}
+            type="button"
+            title="Refresh saved memories from the cloud"
+            aria-label="Refresh saved memories"
+            onClick={refresh}
+            disabled={loading}
+          ><Icon name="refresh" size={18} /></button>
+          <div className="sv-profile-wrap" ref={profileMenuRef}>
+            <button
+              className="sv-profile-trigger"
+              ref={profileButtonRef}
+              type="button"
+              aria-label="Open account menu"
+              aria-expanded={profileOpen}
+              aria-controls="sv-account-menu"
+              title="Account and log out"
+              onClick={() => { setProfileOpen(open => !open); setLogoutError('') }}
+            >
+              <span className="sv-avatar sv-top-avatar">{(session?.user?.email || 'S').slice(0, 1).toUpperCase()}</span>
+            </button>
+            {profileOpen && (
+              <div className="sv-profile-menu" id="sv-account-menu" aria-label="Account options">
+                <div className="sv-profile-heading">
+                  <span className="sv-avatar">{(session?.user?.email || 'S').slice(0, 1).toUpperCase()}</span>
+                  <div className="sv-profile-identity">
+                    <strong>Samhaal account</strong>
+                    <small>{session?.user?.email || 'Signed in'}</small>
+                  </div>
+                </div>
+                <button
+                  className="sv-profile-logout"
+                  ref={profileLogoutRef}
+                  type="button"
+                  onClick={signOut}
+                  disabled={signingOut}
+                ><Icon name="logout" size={17} /> {signingOut ? 'Logging out…' : 'Log out'}</button>
+                {logoutError && <p className="sv-profile-error" role="alert">{logoutError}</p>}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
