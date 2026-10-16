@@ -7,15 +7,11 @@
           </nav>
 
           <div className="landing-nav-actions">
-            <>
-              <button className="landing-nav-ghost" onClick={(e) => handleNavClick(e, 'early-access')}>
-                Early Access
-              </button>
-              <button className="landing-cta-primary" onClick={(e) => handleNavClick(e, 'waitlist')}>
-                <span>Join Waitlist</span>
-                <LandingIcons.ArrowRight />
-              </button>
-            </>
+            <a className="landing-nav-ghost landing-auth-link" href="/login">Log in</a>
+            <a className="landing-cta-primary landing-app-link" href="/get-app">
+              <span>Get App</span>
+              <LandingIcons.ArrowRight />
+            </a>
             <button
               className="landing-mobile-toggle"
               onClick={() => setMobileMenuOpen((v) => !v)}
@@ -52,19 +48,11 @@
                 })}
               </div>
               <div className="mobile-menu-actions">
-                <button
-                  className="mobile-btn-primary"
-                  onClick={(e) => handleNavClick(e, 'waitlist')}
-                >
-                  <span>Join Early Access</span>
+                <a className="mobile-btn-primary" href="/get-app">
+                  <span>Get App</span>
                   <LandingIcons.ArrowRight />
-                </button>
-                <button
-                  className="mobile-btn-ghost"
-                  onClick={(e) => handleNavClick(e, 'early-access')}
-                >
-                  Learn about Early Access
-                </button>
+                </a>
+                <a className="mobile-btn-ghost" href="/login">Log in</a>
               </div>
             </div>
           </>
