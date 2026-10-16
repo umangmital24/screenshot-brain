@@ -122,3 +122,8 @@
   .portal-search .portal-button { width: 100%; }
   .portal-topbar { padding: 0 16px; }
 }
+
+/* Google Identity Services renders its official sign-in button here. */
+.portal-google-slot { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: center; margin-bottom: 18px; }
+.portal-google-slot > div { max-width: 100%; }
+.portal-google-loading { color: #777; font-size: 12px; margin: 0 0 12px; text-align: center; }
