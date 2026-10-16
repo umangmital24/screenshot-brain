@@ -104,47 +104,6 @@
         </div>
       </section>
 
-      {/* Early Access Section */}
-      <section id="early-access" className="landing-section">
-        <div className="landing-container">
-          <div className="landing-section-header">
-            <span className="landing-section-tag">EARLY ACCESS</span>
-            <h2 className="landing-section-title">Help shape Samhaal before the public launch</h2>
-            <p className="landing-section-subtitle">
-              We are opening Samhaal to a small group first so we can learn how people actually save, search, and revisit screenshots. Windows beta comes first, Android follows next.
-            </p>
-          </div>
-          <div className="landing-pricing-grid">
-            <div className="landing-pricing-card">
-              <div className="pricing-card-top">
-                <span className="pricing-plan-name">Windows Beta</span>
-                <p className="pricing-plan-desc">The first hands-on Samhaal client for early users.</p>
-              </div>
-              <ul className="pricing-feature-list">
-                <li><LandingIcons.Check /> On-device Windows OCR</li>
-                <li><LandingIcons.Check /> Raw screenshot privacy-first flow</li>
-                <li><LandingIcons.Check /> Searchable organized memories</li>
-                <li><LandingIcons.Check /> Early-user feedback loop</li>
-              </ul>
-              <button className="pricing-btn" onClick={(e) => handleNavClick(e, 'waitlist')}>Join Windows Waitlist</button>
-            </div>
-            <div className="landing-pricing-card is-recommended">
-              <div className="pricing-card-top">
-                <span className="pricing-plan-name">Android Next</span>
-                <p className="pricing-plan-desc">Planned after the Windows beta using Google ML Kit for on-device OCR.</p>
-              </div>
-              <ul className="pricing-feature-list">
-                <li><LandingIcons.Check /> Google ML Kit OCR on device</li>
-                <li><LandingIcons.Check /> Minimal extracted data sent for AI organization</li>
-                <li><LandingIcons.Check /> Designed around real screenshot habits</li>
-                <li><LandingIcons.Check /> Early access based on waitlist demand</li>
-              </ul>
-              <button className="pricing-btn is-primary" onClick={(e) => handleNavClick(e, 'waitlist')}>Join Early Access</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* FAQ Section */}
       <section id="faq" className="landing-section landing-section-alt">
         <div className="landing-container">
@@ -178,23 +137,3 @@
           </div>
         </div>
       </section>
-
-      {/* Early Access Waitlist Section */}
-      <section id="waitlist" className="landing-section">
-        <div className="landing-container">
-          <div className="waitlist-box">
-            <div className="waitlist-header">
-              <span className="landing-section-tag">EARLY ACCESS</span>
-              <h2 className="waitlist-title">Join the Samhaal early access waitlist</h2>
-              <p className="waitlist-subtitle">
-                Reserve your spot to unlock upcoming desktop hotkeys (macOS/Windows) and browser extensions, and save your gallery from becoming a screenshot graveyard.
-              </p>
-            </div>
-
-            {waitlistResult ? (
-              <div className="waitlist-success-card">
-                <span className="success-icon"><LandingIcons.Check /></span>
-                <h3 className="success-title">You're on the early access waitlist!</h3>
-                <p className="success-text">
-                  {waitlistResult.message || "We've reserved your priority spot. You'll receive early invite instructions directly in your inbox."}
-                </p>
