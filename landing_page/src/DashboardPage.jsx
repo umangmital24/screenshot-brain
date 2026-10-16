@@ -145,7 +145,6 @@ export default function DashboardPage() {
   const searchRef = useRef(null)
   const chatBottom = useRef(null)
   const detailClose = useRef(null)
-  const searchState = useRef({})
 
   useEffect(() => {
     let mounted = true
@@ -181,7 +180,8 @@ export default function DashboardPage() {
         event.preventDefault()
         setView('memories')
         setSidebarOpen(false)
-        searchRef.current?.focus()
+        // Wait until the Memory Library has mounted the search input.
+        window.setTimeout(() => searchRef.current?.focus(), 0)
       }
       if (event.key === 'Escape') { setSelected(null); setSidebarOpen(false) }
     }
