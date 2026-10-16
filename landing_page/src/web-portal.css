@@ -626,37 +626,3 @@
   outline-offset: 1px;
 }
 .portal-auth-shell .portal-password-toggle:disabled { cursor: not-allowed; opacity: .5; }
-.portal-companion-peek-eye, .portal-companion-peek-smile { opacity: 0; transition: opacity .18s ease; }
-.portal-companion-scene.is-peek .portal-companion-peek-eye,
-.portal-companion-scene.is-peek .portal-companion-peek-smile { opacity: 1; }
-.portal-companion-scene.is-peek .portal-companion-right-eye { opacity: 0; }
-.portal-companion-scene.is-peek .portal-companion-smile { opacity: 0; }
-.portal-companion-scene.is-peek .portal-companion-eyes { animation: none; }
-.portal-companion-scene.is-peek .portal-companion-pupils {
-  transform: translate(11px, -3px);
-}
-.portal-companion-scene.is-peek .portal-companion-leaf {
-  transform: rotate(13deg) translate(8px, -4px);
-}
-.portal-companion-scene.is-peek .portal-companion-eyebrows { opacity: 1; }
-.portal-companion-scene.is-peek .portal-companion-hands {
-  opacity: 1;
-  transform: translateY(11px) translateX(-4px) rotate(-6deg) scale(.93);
-}
-.portal-companion-scene.is-peek .portal-companion-sprite {
-  animation: portal-companion-sneak .65s ease-out 1;
-}
-.portal-companion-scene.is-peek .portal-companion-mood {
-  transform: translate(-5px, -9px) rotate(12deg);
-}
-@keyframes portal-companion-sneak {
-  0% { transform: translateX(-7px) rotate(-8deg); }
-  45% { transform: translateX(10px) rotate(9deg); }
-  70% { transform: translateX(4px) rotate(4deg); }
-  100% { transform: translateX(0) rotate(0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .portal-companion-scene.is-peek .portal-companion-sprite { animation: none; }
-}
-
-
