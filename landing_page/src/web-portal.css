@@ -1014,3 +1014,84 @@
 @media (prefers-reduced-motion: reduce) {
   .portal-companion-scene.is-peek .portal-companion-sprite { animation: none; }
 }
+
+
+/* Nori 3.0: memory-orb identity with a lively orbiting little buddy. */
+.portal-companion-sprite { aspect-ratio: 320 / 270; }
+.portal-companion-svg { overflow: visible; }
+.portal-companion-mood {
+  right: auto;
+  left: -6%;
+  top: 15%;
+}
+.portal-companion-sidekick {
+  transform-box: view-box;
+  transform-origin: 245px 62px;
+  animation: portal-sidekick-float 4.5s ease-in-out infinite;
+  transition: transform .42s cubic-bezier(.2,.8,.2,1), opacity .2s ease;
+}
+.portal-companion-sidekick-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: portal-sidekick-blink 6.7s ease-in-out infinite;
+  transition: transform .22s ease;
+}
+.portal-companion-scene.is-curious .portal-companion-sidekick-eye,
+.portal-companion-scene.is-peek .portal-companion-sidekick-eye {
+  transform: translate(2px, -2px);
+}
+.portal-companion-scene.is-secret .portal-companion-sidekick,
+.portal-companion-scene.is-surprised .portal-companion-sidekick,
+.portal-companion-scene.is-peek .portal-companion-sidekick,
+.portal-companion-scene.is-sleepy .portal-companion-sidekick {
+  animation: none;
+}
+.portal-companion-scene.is-secret .portal-companion-sidekick {
+  transform: rotate(-14deg) translate(-6px, 5px);
+}
+.portal-companion-scene.is-peek .portal-companion-sidekick {
+  transform: rotate(13deg) translate(5px, -6px);
+}
+.portal-companion-scene.is-surprised .portal-companion-sidekick {
+  transform: scale(1.12) translateY(-6px);
+}
+.portal-companion-scene.is-sleepy .portal-companion-sidekick {
+  transform: rotate(-10deg) translateY(9px);
+}
+.portal-companion-scene.is-happy .portal-companion-sidekick,
+.portal-companion-scene.is-proud .portal-companion-sidekick {
+  animation: portal-sidekick-bounce .85s ease-in-out 1;
+}
+.portal-companion-scene.is-wink .portal-companion-sidekick {
+  animation: portal-sidekick-wiggle .75s ease-in-out 1;
+}
+@keyframes portal-sidekick-float {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50% { transform: translateY(-7px) rotate(5deg); }
+}
+@keyframes portal-sidekick-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(-13px) scale(1.09); }
+  65% { transform: translateY(-4px) scale(.97); }
+}
+@keyframes portal-sidekick-wiggle {
+  0%,100% { transform: rotate(0); }
+  33% { transform: rotate(13deg); }
+  66% { transform: rotate(-12deg); }
+}
+@keyframes portal-sidekick-blink {
+  0%, 46%, 49%, 100% { transform: scaleY(1); }
+  47.5% { transform: scaleY(.12); }
+}
+@media (max-width: 1000px) {
+  .portal-companion-compact .portal-companion-mood { left: 0; right: auto; top: 10%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal-companion-sidekick,
+  .portal-companion-sidekick-eye,
+  .portal-companion-scene.is-happy .portal-companion-sidekick,
+  .portal-companion-scene.is-proud .portal-companion-sidekick,
+  .portal-companion-scene.is-wink .portal-companion-sidekick {
+    animation: none;
+  }
+}
